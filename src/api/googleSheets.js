@@ -1,52 +1,63 @@
 // src/api/googleSheets.js
 
-// ▼▼▼ 請將引號內的網址換成您的 Google Apps Script 部署網址 ▼▼▼
-const API_URL = "https://script.google.com/macros/s/AKfycbx7---INM12kQvRJ7n3xEbN2M_RKmyEInqIqlO9pOIZ2guMui0TStaAOIBdm7Hhr4w3/exec";
+// 請確認這串 URL 是你最新的 Google Script 部署網址
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyJjXGqYIpjQJQuX2G6Xq-kVB7qK0T8lq0uvC-F_TBhG2l40iZtvOQvbvVgwYqfJ82/exec';
 
-// 取得所有隊員資料
+// 1. 取得使用者
 export const fetchUsers = async () => {
   try {
-    const res = await fetch(`${API_URL}?action=getUsers`);
-    return await res.json();
+    const response = await fetch(`${SCRIPT_URL}?action=getUsers`);
+    return await response.json();
   } catch (error) {
-    console.error("Fetch Users Error:", error);
+    console.error("Error fetching users:", error);
     return [];
   }
 };
 
-// 取得已開放的日期
+// 2. 取得日期
 export const fetchDates = async () => {
   try {
-    const res = await fetch(`${API_URL}?action=getDates`);
-    return await res.json();
+    const response = await fetch(`${SCRIPT_URL}?action=getDates`);
+    return await response.json();
   } catch (error) {
-    console.error("Fetch Dates Error:", error);
+    console.error("Error fetching dates:", error);
     return [];
   }
 };
 
-// 取得報名狀況
+// 3. 取得報名資料 (❌ 你的錯誤就是因為少了這一段)
 export const fetchRegistrations = async () => {
   try {
-    const res = await fetch(`${API_URL}?action=getRegistrations`);
-    return await res.json();
+    const response = await fetch(`${SCRIPT_URL}?action=getRegistrations`);
+    return await response.json();
   } catch (error) {
-    console.error("Fetch Regs Error:", error);
+    console.error("Error fetching registrations:", error);
     return [];
   }
 };
 
-// 通用的資料傳送功能 (新增/刪除/更新)
-export const postData = async (action, payload) => {
+// 4. ✨ 新增：一次抓取所有資料 (效能優化用)
+export const fetchAllData = async () => {
   try {
-    // 使用 text/plain 格式避免 CORS 問題
-    const res = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({ action, ...payload })
-    });
-    return await res.json();
+    const response = await fetch(`${SCRIPT_URL}?action=fetchAllData`);
+    const data = await response.json();
+    return data; // 預期回傳 { users: [], dates: [], registrations: [] }
   } catch (error) {
-    console.error("Post Data Error:", error);
-    return { success: false, message: error.message };
+    console.error("Error fetching all data:", error);
+    return { users: [], dates: [], registrations: [] };
+  }
+};
+
+// 5. 寫入資料 (POST)
+export const postData = async (action, data) => {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action, ...data }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error(`Error posting data (${action}):`, error);
+    return { success: false, message: error.toString() };
   }
 };
