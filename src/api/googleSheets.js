@@ -1,7 +1,8 @@
 // src/api/googleSheets.js
 
-// 請確認這串 URL 是你最新的 Google Script 部署網址
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyJjXGqYIpjQJQuX2G6Xq-kVB7qK0T8lq0uvC-F_TBhG2l40iZtvOQvbvVgwYqfJ82/exec';
+// ⚠️⚠️⚠️ 請確認這串 URL 是你最新的 Google Script 部署網址 ⚠️⚠️⚠️
+// (去 Google Apps Script -> 部署 -> 管理部署 -> 複製網頁應用程式網址)
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7---INM12kQvRJ7n3xEbN2M_RKmyEInqIqlO9pOIZ2guMui0TStaAOIBdm7Hhr4w3/exec';
 
 // 1. 取得使用者
 export const fetchUsers = async () => {
@@ -25,7 +26,7 @@ export const fetchDates = async () => {
   }
 };
 
-// 3. 取得報名資料 (❌ 你的錯誤就是因為少了這一段)
+// 3. 取得報名資料 (❌ 你的 AdminPage 和 CoachPage 就是因為少了這個才壞掉)
 export const fetchRegistrations = async () => {
   try {
     const response = await fetch(`${SCRIPT_URL}?action=getRegistrations`);
@@ -36,12 +37,12 @@ export const fetchRegistrations = async () => {
   }
 };
 
-// 4. ✨ 新增：一次抓取所有資料 (效能優化用)
+// 4. 一次抓取所有資料 (效能優化用)
 export const fetchAllData = async () => {
   try {
     const response = await fetch(`${SCRIPT_URL}?action=fetchAllData`);
     const data = await response.json();
-    return data; // 預期回傳 { users: [], dates: [], registrations: [] }
+    return data; 
   } catch (error) {
     console.error("Error fetching all data:", error);
     return { users: [], dates: [], registrations: [] };
