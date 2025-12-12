@@ -2,9 +2,12 @@
 import React from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+
+// 引入頁面元件
 import CoachPage from './pages/CoachPage';
 import MemberPage from './pages/MemberPage';
 import AdminPage from './pages/AdminPage';
+import EquipmentPage from './pages/EquipmentPage'; // ✨ 新增這行
 
 function Home() {
   const navigate = useNavigate();
@@ -42,7 +45,7 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-blue-50 font-sans flex flex-col">
-      {/* Banner 區塊 */}
+      {/* Banner 區塊 (保持原樣) */}
       <div className="relative w-full shadow-md bg-sky-200">
         <img 
           src="/banner.jpg" 
@@ -59,10 +62,10 @@ function Home() {
         </div>
       </div>
 
-      {/* 三大功能按鈕區塊 (已調整順序) */}
+      {/* 功能按鈕區塊 */}
       <div className="flex-grow flex flex-col items-center justify-center gap-6 p-8 w-full max-w-4xl mx-auto">
         
-        {/* 1. 隊員按鈕 (Member) - 最上方 */}
+        {/* 1. 隊員按鈕 (Member) */}
         <button
           onClick={() => handleNavigation('/member')}
           className="w-full md:w-2/3 bg-sky-600 hover:bg-sky-700 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
@@ -74,15 +77,31 @@ function Home() {
           </div>
         </button>
 
-        {/* 2. 教練按鈕 (Coach) - 中間 */}
+        {/* ✨ 2. 新增：公用裝備查詢 (Equipment) - 放在第二順位 */}
+        <button
+          onClick={() => handleNavigation('/equipment')}
+          className="w-full md:w-2/3 bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
+        >
+          <span>🦺</span> 
+          <div className="flex flex-col items-start text-left">
+            <span>公用裝備查詢</span>
+            <span className="text-sm font-normal opacity-80">Equipment Status Inquiry</span>
+          </div>
+        </button>
+
+        {/* 3. 教練按鈕 (Coach) */}
         <button
           onClick={() => handleNavigation('/coach')} 
           className="w-full md:w-2/3 bg-orange-500 hover:bg-orange-600 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
         >
-          <span>📋</span> 船練開放日期 & 槳位生成
+          <span>📋</span> 
+          <div className="flex flex-col items-start text-left">
+            <span>船練開放日期 & 槳位生成</span>
+            <span className="text-sm font-normal opacity-80">Coach Area</span>
+          </div>
         </button>
 
-        {/* 3. 管理員按鈕 (Admin) - 最下方 */}
+        {/* 4. 管理員按鈕 (Admin) */}
         <button
           onClick={() => handleNavigation('/admin', true, 'ruma_admin')}
           className="w-full md:w-2/3 bg-gray-700 hover:bg-gray-800 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
@@ -92,7 +111,7 @@ function Home() {
 
       </div>
 
-      {/* Footer */}
+      {/* Footer (保持原樣) */}
       <footer className="bg-sky-800 text-white text-center py-4 mt-auto">
         <p>
           Designed by{' '}
@@ -117,6 +136,8 @@ function App() {
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/coach" element={<CoachPage />} />
       <Route path="/member" element={<MemberPage />} />
+      {/* ✨ 新增這行路由 */}
+      <Route path="/equipment" element={<EquipmentPage />} />
     </Routes>
   );
 }

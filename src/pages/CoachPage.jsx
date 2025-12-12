@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Trash2, Calendar, Users, Zap, Home, MapPin, Clock } from 'lucide-react';
-import { fetchAllData, postData, fetchUsers, fetchRegistrations } from '../api/googleSheets'; // ✨ 引入 fetchAllData
+import { fetchAllData, postData, fetchUsers, fetchRegistrations } from '../api/googleSheets'; 
 import { generateSeating } from '../utils/seatingLogic';
 import SeatVisualizer from '../components/SeatVisualizer';
 
@@ -74,7 +74,7 @@ const CoachPage = () => {
 
   const loadServerData = async () => {
     setLoading(true);
-    // 🚀 效能優化：一次讀取所有資料 (雖然這裡主要用 Date，但可以順便 Cache 其他資料)
+    // 🚀 效能優化：一次讀取所有資料
     const bigData = await fetchAllData();
     const dates = Array.isArray(bigData.dates) ? bigData.dates : [];
     
@@ -182,8 +182,6 @@ const CoachPage = () => {
 
   const handleGenerateSeating = async () => {
     setLoading(true);
-    // 這裡我們還是呼叫個別 API，或者你也可以改用 fetchAllData 
-    // 但因為這裡邏輯是點擊後才觸發，不影響初始載入速度，所以維持原樣也沒關係
     const allUsers = await fetchUsers();
     const allRegs = await fetchRegistrations();
     if (allRegs.length === 0) {
@@ -196,7 +194,12 @@ const CoachPage = () => {
       const registeredNames = allRegs.filter(r => r.practicedates === item.date).map(r => r.name);
       if (registeredNames.length === 0) return;
       const participants = allUsers.filter(u => registeredNames.includes(u.Name));
-      const boatData = generateSeating(participants);
+      
+      // 這裡假設 generateSeating 回傳 { left:[], right:[], steer:Obj, drummer:Obj }
+      // 如果原本 generateSeating 沒回傳 drummer，這裡可以手動補上
+      let boatData = generateSeating(participants);
+      if (!boatData.drummer) boatData.drummer = null; // 確保有 drummer 欄位
+
       newCharts[item.date] = boatData;
     });
     setSeatingCharts(newCharts);
@@ -207,15 +210,18 @@ const CoachPage = () => {
     }, 100);
   };
 
+  // ✨ 修正後的交換邏輯：支援鼓手 (drummer)
   const handleSwapSeat = (date, pos1, pos2) => {
     console.log("CoachPage Swapping:", pos1, pos2);
 
+    // 深拷貝以避免直接修改 state
     const newCharts = JSON.parse(JSON.stringify(seatingCharts));
     const boat = newCharts[date];
     if (!boat) return;
 
+    // 確保陣列長度足夠 (針對左右排)
     const ensureArrayLength = (side, index) => {
-        if (side === 'steer') return;
+        if (side === 'steer' || side === 'drummer') return;
         if (!boat[side]) boat[side] = [];
         while (boat[side].length <= index) {
             boat[side].push(null);
@@ -225,19 +231,25 @@ const CoachPage = () => {
     ensureArrayLength(pos1.side, pos1.index);
     ensureArrayLength(pos2.side, pos2.index);
 
+    // 取得人員資料
     const getPerson = (pos) => {
         if (pos.side === 'steer') return boat.steer;
+        if (pos.side === 'drummer') return boat.drummer; // 新增鼓手處理
         return boat[pos.side][pos.index];
     };
 
+    // 設定人員資料
     const setPerson = (pos, person) => {
         if (pos.side === 'steer') {
             boat.steer = person || null;
+        } else if (pos.side === 'drummer') {
+            boat.drummer = person || null; // 新增鼓手處理
         } else {
             boat[pos.side][pos.index] = person || null;
         }
     };
 
+    // 執行交換
     const person1 = getPerson(pos1);
     const person2 = getPerson(pos2);
 
