@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import { 
   Trash2, Calendar, Users, Zap, Home, MapPin, Clock, 
   ClipboardCheck, Trophy, Plus, Save, ChevronRight, ChevronDown, 
-  Filter, PieChart, BarChart3, ListChecks, Loader2 // 新增 Loader2 icon
+  Filter, PieChart, BarChart3, ListChecks, Loader2 
 } from 'lucide-react';
 // API
 import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchDates } from '../api/googleSheets'; 
@@ -27,9 +27,9 @@ const CoachPage = () => {
   const [dbDates, setDbDates] = useState([]);
   const [seatingCharts, setSeatingCharts] = useState({});
   
-  // 🚀 優化 Loading 狀態管理
-  const [loading, setLoading] = useState(false); // 控制全頁遮罩 (只在初期載入日期時顯示)
-  const [backgroundLoading, setBackgroundLoading] = useState(false); // 控制背景資料載入 (不擋畫面)
+  // Loading 狀態管理
+  const [loading, setLoading] = useState(false); // 全頁遮罩
+  const [backgroundLoading, setBackgroundLoading] = useState(false); // 背景載入
   
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const hasCheckedAuth = useRef(false);
@@ -100,7 +100,7 @@ const CoachPage = () => {
         }
         if (inputVal && inputVal.toLowerCase().trim() === 'open') {
             setIsAuthenticated(true);
-            loadPriorityData(); // 🚀 登入成功後，只載入最優先的資料
+            loadPriorityData(); 
         } else {
             if (inputVal !== undefined) await Swal.fire('密碼錯誤', '無法進入教練頁面', 'error');
             navigate('/');
@@ -111,11 +111,9 @@ const CoachPage = () => {
     }
   };
 
-  // 🚀 第一階段：極速載入 (只抓日期)
   const loadPriorityData = async () => {
     setLoading(true);
     try {
-      // 1. 只呼叫 fetchDates (這非常快)
       const datesData = await fetchDates();
       
       const dates = Array.isArray(datesData) ? datesData : [];
@@ -127,7 +125,6 @@ const CoachPage = () => {
       
       setDbDates(dateList);
       
-      // 設定預設篩選日期
       if (dateList.length > 0) {
           const lastDateStr = dateList[0].date.split('(')[0].replace(/\//g, '-');
           setTargetDay(lastDateStr);
@@ -138,18 +135,14 @@ const CoachPage = () => {
     } catch (error) {
       console.error("Priority Load Error", error);
     } finally {
-      // 🚀 關鍵：日期拿到後立刻解除鎖定，讓使用者看到畫面
       setLoading(false);
-      // 接著在背景偷偷載入剩下的重資料
       loadBackgroundData();
     }
   };
 
-  // 🚀 第二階段：背景載入 (抓大資料)
   const loadBackgroundData = async () => {
     setBackgroundLoading(true);
     try {
-      // 平行下載所有詳細資料
       const [bigData, attData] = await Promise.all([
         fetchAllData(),
         fetchAttendance()
@@ -166,7 +159,6 @@ const CoachPage = () => {
     }
   };
 
-  // --- 統計計算邏輯 ---
   const calculateStats = () => {
     if (!Array.isArray(rawAttendanceHistory)) return;
 
@@ -248,7 +240,6 @@ const CoachPage = () => {
       if (res.success) successCount++;
     }
     
-    // 重新載入日期就好，不需要全部重載
     const datesData = await fetchDates();
     const dates = Array.isArray(datesData) ? datesData : [];
     const dateList = dates.map(d => ({
@@ -281,7 +272,6 @@ const CoachPage = () => {
       setLoading(true);
       const res = await postData('clearPastData', {});
       
-      // 這裡也只重抓日期即可
       const datesData = await fetchDates();
       const dateList = datesData.map(d => ({
           date: d.Confirmed_date || d.Confirmed_Date,
@@ -313,7 +303,6 @@ const CoachPage = () => {
         setLoading(true);
         const res = await postData('deleteDate', { Confirmed_date: dateStr });
         
-        // 局部更新 UI，不需要全頁重載
         if(res.success) {
             setDbDates(prev => prev.filter(d => d.date !== dateStr));
             setLoading(false);
@@ -325,8 +314,6 @@ const CoachPage = () => {
   };
 
   const handleGenerateSeating = async () => {
-    // 這裡不需要 setLoading(true) 因為資料可能已經在背景載好了
-    // 檢查背景資料是否載入完成
     if (backgroundLoading) {
         Swal.fire('資料同步中', '請稍候 2-3 秒等待隊員資料同步...', 'info');
         return;
@@ -337,7 +324,6 @@ const CoachPage = () => {
       return;
     }
     
-    // 開始計算 (這是純前端運算，非常快，不需要 loading spinner)
     const newCharts = {};
     dbDates.forEach(item => {
       const registeredNames = registrations.filter(r => r.practicedates === item.date).map(r => r.name);
@@ -396,9 +382,8 @@ const CoachPage = () => {
     setSeatingCharts(newCharts);
   };
 
-  // 點名邏輯
+  // --- 點名邏輯 ---
   const openRollCall = (specificDate = null) => {
-    // 檢查背景資料
     if (backgroundLoading) {
         Swal.fire('資料同步中', '請稍候，正在下載最新報名名單...', 'info');
         return;
@@ -433,18 +418,59 @@ const CoachPage = () => {
     }
   };
 
+  // ✨✨✨ 點名優化：樂觀更新 (Optimistic UI Update) ✨✨✨
+  const updateLocalHistoryOptimistically = (dateStr, names) => {
+      // 1. 標準化日期格式：將 "2026/01/07(Wed)" 轉為 "2026-01-07"
+      // 這樣本地數據格式會跟資料庫讀回來的格式一致
+      const cleanDate = dateStr.split('(')[0].replace(/\//g, '-');
+      
+      setRawAttendanceHistory(prev => {
+          // 2. 先移除該日期原本的舊紀錄 (以免重複或沒更新到移除的人)
+          const filtered = prev.filter(r => {
+              const rDate = r.Date.split('(')[0].replace(/\//g, '-');
+              return rDate !== cleanDate;
+          });
+
+          // 3. 塞入新的紀錄
+          const newRecords = names.map(name => ({
+              Date: cleanDate, 
+              Name: name
+          }));
+
+          // 4. 回傳合併後的數據 -> 這會直接觸發 useEffect 重新計算排行榜
+          return [...filtered, ...newRecords];
+      });
+  };
+
   const submitAttendance = async () => {
     if (!rollCallDate) return;
+    
+    // 1. 啟動 Loading 遮罩
     setLoading(true);
+    
+    // 2. 呼叫後端儲存 (這個動作需要 1-2 秒，是唯一的等待時間)
     const result = await saveAttendance(rollCallDate, attendanceList);
+    
+    // 3. 請求完成，**立刻**關閉 Loading
+    // 我們不需要等待 fetchAttendance (因為那個很慢)，這裡直接讓使用者覺得完成了
     setLoading(false);
+    
     if (result.success) {
       setShowAttendanceModal(false);
-      Swal.fire('點名完成!', `已儲存 ${rollCallDate} 的點名紀錄`, 'success');
       
-      // 更新出席資料 (背景更新即可)
-      const attData = await fetchAttendance();
-      setRawAttendanceHistory(attData); 
+      // 4. 顯示成功訊息 (設定 timer 自動關閉，且隱藏確認按鈕，讓流程更順)
+      Swal.fire({
+        icon: 'success',
+        title: '點名完成!',
+        text: `已儲存 ${rollCallDate} 的紀錄`,
+        timer: 1500,
+        showConfirmButton: false
+      });
+      
+      // 5. 【關鍵】直接在本地端更新排行榜資料 (Optimistic Update)
+      // 這樣使用者切換到「出席報表」時，數據已經是新的了，不用等網路下載
+      updateLocalHistoryOptimistically(rollCallDate, attendanceList);
+
     } else {
       Swal.fire('失敗', '儲存點名失敗', 'error');
     }
@@ -492,8 +518,7 @@ const CoachPage = () => {
                 >
                     <tab.icon size={20} />
                     <span className="text-sm md:text-base">{tab.label}</span>
-                    
-                    {/* 如果背景正在載入資料，且不是第一個 Tab，顯示小轉圈 */}
+                    {/* 背景載入提示 */}
                     {backgroundLoading && tab.id !== 'dates' && (
                         <span className="absolute top-1 right-1">
                             <Loader2 size={12} className="animate-spin text-orange-400" />
@@ -897,7 +922,6 @@ const CoachPage = () => {
         </div>
       )}
 
-      {/* 全頁 Loading 遮罩 - 只有在初始載入「日期」時會出現 */}
       {loading && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="bg-white p-6 rounded-xl flex flex-col items-center gap-4"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500"></div><p className="font-bold text-gray-700">處理中...</p></div></div>}
     </div>
   );
