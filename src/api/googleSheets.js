@@ -45,11 +45,11 @@ export const fetchAllData = async () => {
     return data; 
   } catch (error) {
     console.error("Error fetching all data:", error);
-    return { users: [], dates: [], registrations: [] };
+    return { users: [], dates: [], registrations: [], equipment: [], borrowRecords: [] };
   }
 };
 
-// 5. 寫入資料 (POST)
+// 5. 寫入資料 (POST 通用函式)
 export const postData = async (action, data) => {
   try {
     const response = await fetch(SCRIPT_URL, {
@@ -60,5 +60,35 @@ export const postData = async (action, data) => {
   } catch (error) {
     console.error(`Error posting data (${action}):`, error);
     return { success: false, message: error.toString() };
+  }
+};
+
+// ✨✨✨ 6. 儲存出席名單 (點名用) ✨✨✨
+export const saveAttendance = async (date, attendees) => {
+  try {
+    // attendees 是一個包含名字的陣列，例如 ['Eric', 'Kenny']
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'saveAttendance',
+        Date: date,
+        Attendees: attendees
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error saving attendance:", error);
+    return { success: false, message: error.toString() };
+  }
+};
+
+// ✨✨✨ 7. 取得歷史出席紀錄 (排行榜用) ✨✨✨
+export const fetchAttendance = async () => {
+  try {
+    const response = await fetch(`${SCRIPT_URL}?action=getAttendance`);
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching attendance:", error);
+    return [];
   }
 };
