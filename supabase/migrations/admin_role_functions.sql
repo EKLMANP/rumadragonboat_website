@@ -10,9 +10,9 @@ DROP FUNCTION IF EXISTS get_role_id_by_name(TEXT);
 
 -- 2. 建立輔助函式：根據角色名稱取得角色 ID
 CREATE OR REPLACE FUNCTION get_role_id_by_name(role_name TEXT)
-RETURNS INTEGER AS $$
+RETURNS UUID AS $$
 DECLARE
-    result_id INTEGER;
+    result_id UUID;
 BEGIN
     SELECT id INTO result_id FROM roles WHERE name = role_name;
     RETURN result_id;
@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION admin_assign_role(
 )
 RETURNS JSONB AS $$
 DECLARE
-    role_id_val INTEGER;
+    role_id_val UUID;
     caller_roles TEXT[];
 BEGIN
     -- 取得呼叫者的角色列表

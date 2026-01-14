@@ -1,55 +1,38 @@
--- =============================================
--- 設定用戶權限腳本
--- =============================================
+-- =====================================================
+-- 設定使用者角色 (請在建立使用者後執行)
+-- =====================================================
 
--- 1. 查詢 roles 表取得角色 ID
-SELECT id, name FROM roles;
+DO $$
+DECLARE
+  v_admin_role_id UUID;
+  v_mgmt_role_id UUID;
+  v_user_id UUID;
+BEGIN
+  -- 取得 Role ID
+  SELECT id INTO v_admin_role_id FROM roles WHERE name = 'admin';
+  SELECT id INTO v_mgmt_role_id FROM roles WHERE name = 'management';
 
--- 2. 查詢 auth.users 取得用戶 ID
-SELECT id, email FROM auth.users 
-WHERE email IN ('n79928@gmail.com', 'siaominpan@gmail.com');
+  -- 1. 設定 Admin (rumadragonboat@gmail.com)
+  SELECT id INTO v_user_id FROM auth.users WHERE email = 'rumadragonboat@gmail.com';
+  IF v_user_id IS NOT NULL THEN
+    -- 先移除可能存在的 member 角色 (可選)或是直接疊加，這裡選擇直接插入 admin
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_user_id, v_admin_role_id) 
+    ON CONFLICT (user_id, role_id) DO NOTHING;
+    
+    RAISE NOTICE 'Admin role assigned to rumadragonboat@gmail.com';
+  ELSE
+    RAISE NOTICE 'User rumadragonboat@gmail.com not found. Please create it in Authentication > Users first.';
+  END IF;
 
--- 3. 設定 n79928@gmail.com 為 management 權限
--- 請先執行上面的查詢，取得實際的 user_id 和 role_id，再執行下方的 INSERT
--- 將 <user_id_1> 替換為 n79928@gmail.com 的 user id
--- 將 <management_role_id> 替換為 management 的 role id
+  -- 2. 設定 Management (n79928@gmail.com)
+  SELECT id INTO v_user_id FROM auth.users WHERE email = 'n79928@gmail.com';
+  IF v_user_id IS NOT NULL THEN
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_user_id, v_mgmt_role_id) 
+    ON CONFLICT (user_id, role_id) DO NOTHING;
+    
+    RAISE NOTICE 'Management role assigned to n79928@gmail.com';
+  ELSE
+    RAISE NOTICE 'User n79928@gmail.com not found. Please create it in Authentication > Users first.';
+  END IF;
 
--- INSERT INTO user_roles (user_id, role_id)
--- SELECT u.id, r.id
--- FROM auth.users u, roles r
--- WHERE u.email = 'n79928@gmail.com' AND r.name = 'management';
-
--- 4. 設定 siaominpan@gmail.com 為 member 權限
--- INSERT INTO user_roles (user_id, role_id)
--- SELECT u.id, r.id
--- FROM auth.users u, roles r
--- WHERE u.email = 'siaominpan@gmail.com' AND r.name = 'member';
-
--- =============================================
--- 快速版本 - 一次設定兩個用戶 (取消註解執行)
--- =============================================
-
--- 設定 n79928@gmail.com 為 management
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.id, r.id
-FROM auth.users u
-CROSS JOIN roles r
-WHERE u.email = 'n79928@gmail.com' AND r.name = 'management'
-ON CONFLICT (user_id, role_id) DO NOTHING;
-
--- 設定 siaominpan@gmail.com 為 member
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.id, r.id
-FROM auth.users u
-CROSS JOIN roles r
-WHERE u.email = 'siaominpan@gmail.com' AND r.name = 'member'
-ON CONFLICT (user_id, role_id) DO NOTHING;
-
--- 5. 確認結果
-SELECT 
-    u.email,
-    r.name as role_name
-FROM user_roles ur
-JOIN auth.users u ON ur.user_id = u.id
-JOIN roles r ON ur.role_id = r.id
-WHERE u.email IN ('n79928@gmail.com', 'siaominpan@gmail.com');
+END $$;

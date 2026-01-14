@@ -22,22 +22,36 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
 
-        if (body.action === 'create_user') {
-            console.log('Creating user:', body.email);
+        if (body.action === 'create_user' || body.action === 'assign_role') {
+            console.log('Processing user:', body.email);
 
-            const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
-                email: body.email,
-                password: body.password || '000000',
-                email_confirm: true,
-                user_metadata: { name: body.name }
-            });
+            // Check if user already exists
+            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+            const existingUser = existingUsers?.users?.find(u => u.email === body.email);
 
-            if (error) {
-                console.log('Error:', error.message);
-                return new Response(JSON.stringify({ error: error.message }), {
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                    status: 400,
+            let userId: string;
+
+            if (existingUser) {
+                console.log('User exists:', existingUser.id);
+                userId = existingUser.id;
+            } else {
+                // Create new user
+                console.log('Creating new user:', body.email);
+                const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+                    email: body.email,
+                    password: body.password || '000000',
+                    email_confirm: true,
+                    user_metadata: { name: body.name }
                 });
+
+                if (error) {
+                    console.log('Create error:', error.message);
+                    return new Response(JSON.stringify({ error: error.message }), {
+                        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                        status: 400,
+                    });
+                }
+                userId = newUser.user.id;
             }
 
             // Set role
@@ -49,21 +63,24 @@ serve(async (req) => {
                     .single();
 
                 if (roleData) {
+                    // Delete existing roles first
+                    await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+                    // Insert new role
                     await supabaseAdmin.from('user_roles').insert({
-                        user_id: newUser.user.id,
+                        user_id: userId,
                         role_id: roleData.id
                     });
                 }
             }
 
-            // Update members
+            // Update members table
             await supabaseAdmin
                 .from('members')
                 .update({ email: body.email })
                 .eq('name', body.name);
 
             console.log('Success!');
-            return new Response(JSON.stringify({ success: true, userId: newUser.user.id }), {
+            return new Response(JSON.stringify({ success: true, userId }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 200,
             });
