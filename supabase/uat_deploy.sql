@@ -760,3 +760,8 @@ INSERT INTO redeemable_products (name, description, u_coins_price, stock, is_act
   ('RUMA限量棒球帽', 'RUMA 限量版棒球帽', 25, 30, true);
 
 -- 完成！
+-- Add i18n columns to news table
+ALTER TABLE news 
+ADD COLUMN IF NOT EXISTS title_en TEXT,
+ADD COLUMN IF NOT EXISTS excerpt_en TEXT,
+ADD COLUMN IF NOT EXISTS content_en JSONB DEFAULT '[]'::jsonb;
