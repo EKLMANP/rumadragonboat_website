@@ -45,6 +45,8 @@ const AdminPage = () => {
   const [authUsers, setAuthUsers] = useState([]); // 新增使用者管理狀態
   const [bugs, setBugs] = useState([]); // Bug Reports
   const [bugPage, setBugPage] = useState(1); // Bug pagination
+  const [memberPage, setMemberPage] = useState(1); // Member list pagination
+  const [rolePage, setRolePage] = useState(1); // Role management pagination
 
   // --- 隊員表單狀態 ---
   const [newFormData, setNewFormData] = useState({
@@ -537,7 +539,7 @@ const AdminPage = () => {
 
                   <button
                     onClick={handleAddUser}
-                    className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 mt-4 shadow-sm"
+                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 mt-4 shadow-sm"
                   >
                     <Plus size={20} /> 新增
                   </button>
@@ -555,120 +557,145 @@ const AdminPage = () => {
                   {users.length === 0 ? (
                     <p className="text-gray-400 text-center py-8">尚無資料</p>
                   ) : (
-                    users.map((user) => {
-                      const isEditing = editingId === user.Name;
-                      const isExpanded = expandedId === user.Name;
-                      const showDetails = isEditing || isExpanded;
+                    <>
+                      {users.slice((memberPage - 1) * 5, memberPage * 5).map((user) => {
+                        const isEditing = editingId === user.Name;
+                        const isExpanded = expandedId === user.Name;
+                        const showDetails = isEditing || isExpanded;
 
-                      return (
-                        <div key={user.Name} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-sm transition bg-white">
+                        return (
+                          <div key={user.Name} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-sm transition bg-white">
 
-                          <div className="flex items-center justify-between p-3 bg-gray-50">
-                            <div
-                              className="flex items-center gap-3 cursor-pointer select-none flex-1"
-                              onClick={() => toggleExpand(user.Name)}
-                            >
-                              {showDetails ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
-                              <span className="font-bold text-gray-800">{user.Name}</span>
+                            <div className="flex items-center justify-between p-3 bg-gray-50">
+                              <div
+                                className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                onClick={() => toggleExpand(user.Name)}
+                              >
+                                {showDetails ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
+                                <span className="font-bold text-gray-800">{user.Name}</span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition"
+                                  title="刪除"
+                                >
+                                  <MinusCircle size={18} />
+                                </button>
+
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-600 hover:text-white transition"
+                                  title="編輯"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition"
-                                title="刪除"
-                              >
-                                <MinusCircle size={18} />
-                              </button>
+                            {showDetails && (
+                              <div className="p-4 bg-white border-t border-gray-100 animate-fadeIn">
+                                {isEditing ? (
+                                  <div className="space-y-3">
+                                    <div className="text-sm text-purple-600 font-bold mb-2">正在編輯: {user.Name}</div>
 
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-600 hover:text-white transition"
-                                title="編輯"
-                              >
-                                <Edit size={16} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {showDetails && (
-                            <div className="p-4 bg-white border-t border-gray-100 animate-fadeIn">
-                              {isEditing ? (
-                                <div className="space-y-3">
-                                  <div className="text-sm text-purple-600 font-bold mb-2">正在編輯: {user.Name}</div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div>
-                                      <label className="text-xs text-gray-400">體重</label>
-                                      <input
-                                        name="Weight"
-                                        type="number"
-                                        value={editFormData.Weight}
-                                        onChange={handleEditChange}
-                                        className="w-full p-2 border rounded text-sm text-gray-800"
-                                      />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="text-xs text-gray-400">體重</label>
+                                        <input
+                                          name="Weight"
+                                          type="number"
+                                          value={editFormData.Weight}
+                                          onChange={handleEditChange}
+                                          className="w-full p-2 border rounded text-sm text-gray-800"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-xs text-gray-400">技術評分</label>
+                                        <select
+                                          name="Skill_Rating"
+                                          value={editFormData.Skill_Rating}
+                                          onChange={handleEditChange}
+                                          className="w-full p-2 border rounded text-sm bg-white text-gray-800"
+                                        >
+                                          {SKILL_OPTIONS.map(o => <option key={o} value={o}>Level {o}</option>)}
+                                        </select>
+                                      </div>
                                     </div>
+
                                     <div>
-                                      <label className="text-xs text-gray-400">技術評分</label>
+                                      <label className="text-xs text-gray-400">位置</label>
                                       <select
-                                        name="Skill_Rating"
-                                        value={editFormData.Skill_Rating}
+                                        name="Position"
+                                        value={editFormData.Position}
                                         onChange={handleEditChange}
                                         className="w-full p-2 border rounded text-sm bg-white text-gray-800"
                                       >
-                                        {SKILL_OPTIONS.map(o => <option key={o} value={o}>Level {o}</option>)}
+                                        {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                       </select>
                                     </div>
-                                  </div>
 
-                                  <div>
-                                    <label className="text-xs text-gray-400">位置</label>
-                                    <select
-                                      name="Position"
-                                      value={editFormData.Position}
-                                      onChange={handleEditChange}
-                                      className="w-full p-2 border rounded text-sm bg-white text-gray-800"
-                                    >
-                                      {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
+                                    <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100">
+                                      <button
+                                        onClick={handleCancelEdit}
+                                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                      <button
+                                        onClick={handleSaveEdit}
+                                        className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 shadow-md"
+                                      >
+                                        <Check size={16} />
+                                      </button>
+                                    </div>
                                   </div>
+                                ) : (
+                                  <div className="space-y-2 text-sm text-gray-600 pl-8 relative">
+                                    <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                    {user.Email && (
+                                      <p><span className="font-semibold text-gray-800 inline-block w-20">Email:</span> {user.Email}</p>
+                                    )}
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">體重:</span> {user.Weight} kg</p>
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">技術評分:</span> Level {user.Skill_Rating}</p>
+                                    <p>
+                                      <span className="font-semibold text-gray-800 inline-block w-20">位置:</span>
+                                      <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs ml-1">
+                                        {user.Position}
+                                      </span>
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
 
-                                  <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100">
-                                    <button
-                                      onClick={handleCancelEdit}
-                                      className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300"
-                                    >
-                                      <X size={16} />
-                                    </button>
-                                    <button
-                                      onClick={handleSaveEdit}
-                                      className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 shadow-md"
-                                    >
-                                      <Check size={16} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-2 text-sm text-gray-600 pl-8 relative">
-                                  <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                                  {user.Email && (
-                                    <p><span className="font-semibold text-gray-800 inline-block w-20">Email:</span> {user.Email}</p>
-                                  )}
-                                  <p><span className="font-semibold text-gray-800 inline-block w-20">體重:</span> {user.Weight} kg</p>
-                                  <p><span className="font-semibold text-gray-800 inline-block w-20">技術評分:</span> Level {user.Skill_Rating}</p>
-                                  <p>
-                                    <span className="font-semibold text-gray-800 inline-block w-20">位置:</span>
-                                    <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs ml-1">
-                                      {user.Position}
-                                    </span>
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                      {/* Pagination Controls */}
+                      {users.length > 5 && (
+                        <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
+                          <span className="text-sm text-gray-500">
+                            第 {memberPage} / {Math.ceil(users.length / 5)} 頁
+                          </span>
+                          <button
+                            onClick={() => setMemberPage(p => Math.max(1, p - 1))}
+                            disabled={memberPage === 1}
+                            className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                          >
+                            ← 上一頁
+                          </button>
+                          <button
+                            onClick={() => setMemberPage(p => Math.min(Math.ceil(users.length / 5), p + 1))}
+                            disabled={memberPage >= Math.ceil(users.length / 5)}
+                            className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                          >
+                            下一頁 →
+                          </button>
                         </div>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -874,10 +901,10 @@ const AdminPage = () => {
                     從隊員資料中選擇成員並指定權限角色
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full">隊員</span>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">幹部</span>
-                  <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full">管理員</span>
+                <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-shrink-0">
+                  <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-600 rounded-full whitespace-nowrap">隊員</span>
+                  <span className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 rounded-full whitespace-nowrap">幹部</span>
+                  <span className="px-2 sm:px-3 py-1 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap">管理員</span>
                 </div>
               </div>
 
@@ -896,12 +923,12 @@ const AdminPage = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 text-gray-600">
-                      <th className="text-left p-3 font-medium">姓名</th>
-                      <th className="text-left p-3 font-medium">Email</th>
-                      <th className="text-left p-3 font-medium">目前權限</th>
-                      <th className="text-center p-3 font-medium">權限指派</th>
-                      <th className="text-center p-3 font-medium">操作</th>
+                    <tr className="bg-gray-50 text-gray-600 text-xs sm:text-sm">
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">姓名</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Email</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">目前權限</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">權限指派</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -912,7 +939,7 @@ const AdminPage = () => {
                         </td>
                       </tr>
                     ) : (
-                      users.map((member) => {
+                      users.slice((rolePage - 1) * 5, rolePage * 5).map((member) => {
                         // 查找該隊員是否已有系統帳號
                         const authUser = authUsers.find(a => a.email?.toLowerCase() === member.Email?.toLowerCase());
                         const currentRole = authUser?.role || 'member';
@@ -966,8 +993,8 @@ const AdminPage = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="p-3">
-                              <span className={`text-xs px-2 py-1 rounded-full ${currentRole === 'admin' ? 'bg-purple-100 text-purple-700' :
+                            <td className="p-2 sm:p-3">
+                              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap ${currentRole === 'admin' ? 'bg-purple-100 text-purple-700' :
                                 currentRole === 'management' ? 'bg-blue-100 text-blue-700' :
                                   'bg-gray-100 text-gray-600'
                                 }`}>
@@ -1016,12 +1043,12 @@ const AdminPage = () => {
                                     Swal.fire({ icon: 'success', title: '權限已更新', timer: 1500, showConfirmButton: false });
                                   }
                                 }}
-                                className="px-3 py-1.5 border rounded-lg bg-white text-gray-800 text-sm focus:ring-2 focus:ring-emerald-200"
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 border rounded-lg bg-white text-gray-800 text-[10px] sm:text-sm focus:ring-2 focus:ring-emerald-200"
                                 disabled={!member.Email}
                               >
-                                <option value="member">隊員 (Member)</option>
-                                <option value="management">幹部 (Management)</option>
-                                <option value="admin">管理員 (Admin)</option>
+                                <option value="member">隊員</option>
+                                <option value="management">幹部</option>
+                                <option value="admin">管理員</option>
                               </select>
                             </td>
                             <td className="p-3 text-center">
@@ -1063,6 +1090,29 @@ const AdminPage = () => {
                     )}
                   </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                {users.length > 5 && (
+                  <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
+                    <span className="text-sm text-gray-500">
+                      第 {rolePage} / {Math.ceil(users.length / 5)} 頁
+                    </span>
+                    <button
+                      onClick={() => setRolePage(p => Math.max(1, p - 1))}
+                      disabled={rolePage === 1}
+                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                    >
+                      ← 上一頁
+                    </button>
+                    <button
+                      onClick={() => setRolePage(p => Math.min(Math.ceil(users.length / 5), p + 1))}
+                      disabled={rolePage >= Math.ceil(users.length / 5)}
+                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                    >
+                      下一頁 →
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
