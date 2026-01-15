@@ -489,23 +489,23 @@ export default function MyJourneyPage() {
 
                                         {/* 分頁控制 */}
                                         {totalPages > 1 && (
-                                            <div className="flex justify-center items-center gap-4 mt-6">
+                                            <div className="flex justify-center items-center gap-6 mt-8">
                                                 <button
                                                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                                                     disabled={currentPage === 1}
-                                                    className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    className="p-3 rounded-full border border-gray-200 text-sky-600 hover:bg-sky-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent transition shadow-sm"
                                                 >
-                                                    <ChevronLeft size={20} />
+                                                    <ChevronLeft size={24} />
                                                 </button>
-                                                <span className="text-sm font-medium text-gray-600">
-                                                    第 {currentPage} 頁，共 {totalPages} 頁
+                                                <span className="text-base font-medium text-gray-700">
+                                                    第 <span className="text-sky-600 font-bold">{currentPage}</span> 頁 / 共 {totalPages} 頁
                                                 </span>
                                                 <button
                                                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                                                     disabled={currentPage === totalPages}
-                                                    className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    className="p-3 rounded-full border border-gray-200 text-sky-600 hover:bg-sky-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent transition shadow-sm"
                                                 >
-                                                    <ChevronRight size={20} />
+                                                    <ChevronRight size={24} />
                                                 </button>
                                             </div>
                                         )}
