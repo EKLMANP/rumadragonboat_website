@@ -170,11 +170,18 @@ const CoachPage = () => {
       }));
       setAllUsers(allUsersData);
 
-      const newRegsMapped = (actRegsData || []).map(r => ({
-        name: r.users?.name || 'Unknown',
-        practicedates: r.activities?.date ? formatDateWithDay(r.activities.date) : '',
-        activityId: r.activity_id
-      })).filter(r => r.practicedates);
+      const newRegsMapped = (actRegsData || []).map(r => {
+        // 嘗試從 adminUsersData (已載入的完整成員列表) 查找使用者資訊
+        // 解決 API 回傳 registrations 時缺少 users 關聯導致名字為 Unknown 的問題
+        const userInfo = adminUsersData?.data?.users?.find(u => u.id === r.user_id);
+        const resolvedName = userInfo?.memberName || userInfo?.email || r.users?.name || 'Unknown';
+
+        return {
+          name: resolvedName,
+          practicedates: r.activities?.date ? formatDateWithDay(r.activities.date) : '',
+          activityId: r.activity_id
+        };
+      }).filter(r => r.practicedates);
 
       setRegistrations(newRegsMapped);
       setRawAttendanceHistory(attData);
