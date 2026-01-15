@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
-  ChevronDown, ChevronUp, MinusCircle, Edit, Check, X, Plus,
-  Users, Package, RefreshCw, Settings, Save, FileText, Mail, Shield
+  Users, Package, RefreshCw, Settings, Save, FileText, Mail, Shield, MessageSquareWarning, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import {
   fetchAllData, postData,
-  adminCreateUser, adminDeleteUser, adminListUsers, adminUpdateUserRole
+  adminCreateUser, adminDeleteUser, adminListUsers, adminUpdateUserRole,
+  fetchBugReports, updateBugReportStatus
 } from '../api/supabaseApi';
 import AppLayout from '../components/AppLayout';
 
@@ -42,6 +42,7 @@ const AdminPage = () => {
   const [equipment, setEquipment] = useState([]);
   const [borrowRecords, setBorrowRecords] = useState([]);
   const [authUsers, setAuthUsers] = useState([]); // 新增使用者管理狀態
+  const [bugs, setBugs] = useState([]); // Bug Reports
 
   // --- 隊員表單狀態 ---
   const [newFormData, setNewFormData] = useState({
@@ -90,6 +91,25 @@ const AdminPage = () => {
     }
   };
 
+  const loadBugReports = async () => {
+    setLoading(true);
+    const data = await fetchBugReports();
+    setBugs(data);
+    setLoading(false);
+  };
+
+  const handleToggleBugStatus = async (bugId, currentStatus) => {
+    setLoading(true);
+    const res = await updateBugReportStatus(bugId, !currentStatus);
+    if (res.success) {
+      await loadBugReports();
+      Swal.fire('已更新狀態', '', 'success');
+    } else {
+      Swal.fire('更新失敗', res.message, 'error');
+    }
+    setLoading(false);
+  };
+
 
 
   // ==========================================
@@ -104,6 +124,8 @@ const AdminPage = () => {
   useEffect(() => {
     if (activeTab === 'auth_users') {
       loadAuthUsers();
+    } else if (activeTab === 'bugs') {
+      loadBugReports();
     }
   }, [activeTab]);
 
@@ -426,6 +448,13 @@ const AdminPage = () => {
           >
             <Shield size={20} />
             使用者帳號管理
+          </button>
+          <button
+            onClick={() => setActiveTab('bugs')}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap
+              ${activeTab === 'bugs' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+          >
+            <MessageSquareWarning size={20} /> Bug修復記錄
           </button>
         </div>
 
@@ -1031,6 +1060,95 @@ const AdminPage = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== 5. Bug修復記錄 Tab ==================== */}
+        {activeTab === 'bugs' && (
+          <div className="bg-white rounded-xl shadow-lg border border-rose-100 overflow-hidden animate-fade-in-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <MessageSquareWarning className="text-rose-500" /> Bug 回報列表
+              </h2>
+              <button onClick={loadBugReports} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <RefreshCw size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-600 text-sm font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="p-4 border-b">狀態</th>
+                    <th className="p-4 border-b">回報日期</th>
+                    <th className="p-4 border-b">回報者</th>
+                    <th className="p-4 border-b w-1/3">描述</th>
+                    <th className="p-4 border-b">截圖</th>
+                    <th className="p-4 border-b text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {bugs.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="p-8 text-center text-gray-400">
+                        目前沒有 Bug 回報 🎉
+                      </td>
+                    </tr>
+                  ) : (
+                    bugs.map((bug) => (
+                      <tr key={bug.id} className="hover:bg-gray-50 transition">
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1
+                          ${bug.is_fixed ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {bug.is_fixed ? <Check size={12} /> : <MessageSquareWarning size={12} />}
+                            {bug.is_fixed ? '已修復' : '待處理'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm text-gray-600">
+                          {new Date(bug.created_at).toLocaleDateString()}
+                          <div className="text-xs text-gray-400">{new Date(bug.created_at).toLocaleTimeString()}</div>
+                        </td>
+                        <td className="p-4 text-sm font-medium text-gray-800">
+                          <div>{bug.reporter_name}</div>
+                          <div className="text-xs text-gray-400">{bug.reporter_email}</div>
+                        </td>
+                        <td className="p-4 text-sm text-gray-700 whitespace-pre-wrap">{bug.description}</td>
+                        <td className="p-4">
+                          {bug.screenshot_url ? (
+                            <a
+                              href={bug.screenshot_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-blue-600 hover:underline text-sm font-medium"
+                            >
+                              <ImageIcon size={16} /> 查看截圖 <ExternalLink size={12} />
+                            </a>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">無截圖</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          <label className="flex items-center justify-end cursor-pointer gap-2">
+                            <span className="text-sm text-gray-600">{bug.is_fixed ? '標記未修復' : '標記已修復'}</span>
+                            <input
+                              type="checkbox"
+                              checked={bug.is_fixed}
+                              onChange={() => handleToggleBugStatus(bug.id, bug.is_fixed)}
+                              className="w-5 h-5 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer"
+                            />
+                          </label>
+                          {bug.is_fixed && bug.fixed_at && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(bug.fixed_at).toLocaleDateString()} 修復
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

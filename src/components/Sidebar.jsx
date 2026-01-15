@@ -16,14 +16,17 @@ import {
     ClipboardList,
     Settings,
     LogOut,
-    X
+    X,
+    MessageSquareWarning
 } from 'lucide-react';
+import BugReportModal from './BugReportModal';
 
 export default function Sidebar({ isOpen, onToggle }) {
     const location = useLocation();
     const navigate = useNavigate();
     const { userProfile, userRoles, logout } = useAuth();
     const { lang } = useLanguage();
+    const [showBugModal, setShowBugModal] = useState(false);
 
     // 直接從 userRoles 陣列計算權限，避免派生狀態延遲
     const computedIsAdmin = Array.isArray(userRoles) && userRoles.includes('admin');
@@ -201,6 +204,17 @@ export default function Sidebar({ isOpen, onToggle }) {
                     })}
                 </nav>
 
+                {/* Bug Report Button */}
+                <div className="px-4 pb-2">
+                    <button
+                        onClick={() => setShowBugModal(true)}
+                        className="w-full flex items-center px-4 py-3 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-all font-bold group"
+                    >
+                        <MessageSquareWarning size={18} className="mr-3" />
+                        <span>Bug 回報</span>
+                    </button>
+                </div>
+
                 {/* 用戶資訊區 - 固定在底部 */}
                 <div className="flex-shrink-0 p-4 border-t border-slate-700/50 bg-[#0B1120]">
                     <div className="flex items-center space-x-3">
@@ -244,6 +258,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                     </div>
                 </div>
             </aside>
+            <BugReportModal isOpen={showBugModal} onClose={() => setShowBugModal(false)} />
         </>
     );
 }

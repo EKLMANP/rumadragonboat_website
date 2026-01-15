@@ -9,7 +9,7 @@ import {
   Filter, PieChart, BarChart3, ListChecks, Loader2, Info, Megaphone, Newspaper, Edit, X
 } from 'lucide-react';
 // API
-import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchActivities, fetchActivityRegistrations, fetchAnnouncements, fetchDates, adminListUsers } from '../api/supabaseApi';
+import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchActivities, fetchActivityRegistrations, fetchAnnouncements, fetchDates, adminListUsers, saveSeatingArrangement } from '../api/supabaseApi';
 import { generateSeating } from '../utils/seatingLogic';
 import SeatVisualizer from '../components/SeatVisualizer';
 import AppLayout from '../components/AppLayout';
@@ -474,12 +474,21 @@ const CoachPage = () => {
       if (registeredNames.length === 0) return;
       const participants = allUsers.filter(u => registeredNames.includes(u.Name));
 
-      let boatData = generateSeating(participants);
       if (!boatData.drummer) boatData.drummer = null;
-
       newCharts[item.date] = boatData;
+
+      // 🔥 Sync to DB Immediately
+      saveSeatingArrangement(item.date, boatData).catch(err => console.error('Auto-save failed:', err));
     });
     setSeatingCharts(newCharts);
+
+    Swal.fire({
+      icon: 'success',
+      title: '槳位已生成',
+      text: '座位表已自動同步至前台',
+      timer: 1500,
+      showConfirmButton: false
+    });
 
     setTimeout(() => {
       const section = document.getElementById('seating-section');
@@ -524,6 +533,9 @@ const CoachPage = () => {
     setPerson(pos1, person2);
     setPerson(pos2, person1);
     setSeatingCharts(newCharts);
+
+    // 🔥 Sync to DB on Swap
+    saveSeatingArrangement(date, newCharts[date]).catch(err => console.error('Swap save failed:', err));
   };
 
   // --- 點名邏輯 ---
@@ -1108,7 +1120,7 @@ const CoachPage = () => {
                 <div className="flex gap-4">
                   <button onClick={handleClearPast} className="px-6 py-2 border-2 border-red-100 text-red-500 rounded-full hover:bg-red-50 font-bold transition">清除過期資料</button>
                   <button onClick={handleGenerateSeating} className="px-8 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition font-bold flex items-center gap-2">
-                    <Zap size={20} fill="currentColor" /> 重新計算 (Regenerate)
+                    <Zap size={20} fill="currentColor" /> 生成槳位
                   </button>
                 </div>
               </div>

@@ -869,19 +869,206 @@ export const adminCreateUser = async (email, password, name, role) => {
     }
 };
 
+/**
+ * 刪除用戶 (Admin 使用 - 透過 Edge Function)
+ */
 export const adminDeleteUser = async (userId) => {
-    // 刪除用戶的角色記錄（實際刪除 Auth 用戶需要 Edge Function 或 Dashboard）
     try {
-        const { error } = await supabase
-            .from('user_roles')
-            .delete()
-            .eq('user_id', userId);
+        const { data, error } = await supabase.functions.invoke('admin-actions', {
+            body: { action: 'delete_user', userId }
+        });
 
         if (error) throw error;
-        return { success: true, message: '已移除用戶角色' };
+        return { success: true };
     } catch (error) {
-        console.error('Admin delete user role failed:', error);
-        return { success: false, message: error.message || '操作失敗' };
+        console.error("Error deleting user:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+// =====================================================
+// 槳位同步 (Seating Sync)
+// =====================================================
+
+/**
+ * 儲存/更新槳位表 (Coach/Admin)
+ * @param {string} date - 日期 (YYYY-MM-DD or Display Date)
+ * @param {object} boatData - 座位資料 JSON
+ */
+export const saveSeatingArrangement = async (date, boatData) => {
+    try {
+        // 標準化日期: 移除括號與星期，並將 / 轉為 -
+        // Input: "2026/01/18(Sun)" -> "2026-01-18"
+        const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
+
+        console.log('Saving seating for:', cleanDate);
+
+        const { error } = await supabase
+            .from('seating_arrangements')
+            .upsert({
+                practice_date: cleanDate,
+                boat_data: boatData,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'practice_date' });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error saving seating chart:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 讀取槳位表 (All Users)
+ * @param {string} date - 日期 (YYYY-MM-DD or Display Date)
+ */
+export const fetchSeatingArrangement = async (date) => {
+    try {
+        const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
+
+        const { data, error } = await supabase
+            .from('seating_arrangements')
+            .select('boat_data')
+            .eq('practice_date', cleanDate)
+            .single();
+
+        if (error) {
+            if (error.code === 'PGRST116') return null; // Not found is fine
+            throw error;
+        }
+        return data?.boat_data || null;
+    } catch (error) {
+        console.error("Error fetching seating chart:", error);
+        return null;
+    }
+};
+
+/**
+ * 批次讀取槳位表 (All Users) - 用於列表頁
+ * @param {string[]} dates - 日期陣列
+ */
+export const fetchSeatingArrangements = async (dates) => {
+    try {
+        if (!dates || dates.length === 0) return {};
+
+        const cleanDates = dates.map(d => d.split('(')[0].replace(/\//g, '-').trim());
+
+        // map clean date back to original display date for easy lookup
+        const dateMap = {};
+        dates.forEach(d => {
+            dateMap[d.split('(')[0].replace(/\//g, '-').trim()] = d;
+        });
+
+        const { data, error } = await supabase
+            .from('seating_arrangements')
+            .select('practice_date, boat_data')
+            .in('practice_date', cleanDates);
+
+        if (error) throw error;
+
+        // Convert to map: { "2026/01/18(Sun)": data }
+        const result = {};
+        data.forEach(item => {
+            const displayDate = dateMap[item.practice_date];
+            if (displayDate) {
+                result[displayDate] = item.boat_data;
+            }
+        });
+        return result;
+    } catch (error) {
+        console.error("Error fetching seating charts:", error);
+        return {};
+    }
+};
+
+// =====================================================
+// Bug 回報系統
+// =====================================================
+
+/**
+ * 提交 Bug 回報
+ */
+export const submitBugReport = async ({ description, screenshotFile }) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, message: '請先登入' };
+
+        // 1. 上傳截圖 (如果有的話)
+        let screenshotUrl = null;
+        if (screenshotFile) {
+            const fileExt = screenshotFile.name.split('.').pop();
+            const fileName = `${user.id}/${Date.now()}_bug.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('bug-reports')
+                .upload(fileName, screenshotFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('bug-reports')
+                .getPublicUrl(fileName);
+            screenshotUrl = publicUrl;
+        }
+
+        // 2. 寫入資料庫
+        const { error } = await supabase
+            .from('bug_reports')
+            .insert({
+                reporter_id: user.id,
+                reporter_name: user.user_metadata?.name || user.email,
+                reporter_email: user.email,
+                description,
+                screenshot_url: screenshotUrl
+            });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error submitting bug report:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 取得 Bug 回報列表 (Admin)
+ */
+export const fetchBugReports = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('bug_reports')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error("Error fetching bug reports:", error);
+        return [];
+    }
+};
+
+/**
+ * 更新 Bug 狀態 (Admin)
+ */
+export const updateBugReportStatus = async (id, isFixed) => {
+    try {
+        const updates = {
+            is_fixed: isFixed,
+            fixed_at: isFixed ? new Date().toISOString() : null
+        };
+
+        const { error } = await supabase
+            .from('bug_reports')
+            .update(updates)
+            .eq('id', id);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating bug report:", error);
+        return { success: false, message: error.message };
     }
 };
 

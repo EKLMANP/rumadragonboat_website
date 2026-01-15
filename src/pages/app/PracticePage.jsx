@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter } from 'lucide-react';
-import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations } from '../../api/supabaseApi';
+import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations, fetchSeatingArrangements } from '../../api/supabaseApi';
 import { generateSeating } from '../../utils/seatingLogic';
 import SeatVisualizer from '../../components/SeatVisualizer';
 import AppLayout from '../../components/AppLayout';
@@ -39,6 +39,7 @@ export default function PracticePage() {
     const [practiceSessions, setPracticeSessions] = useState([]);
     const [allRegs, setAllRegs] = useState([]);
     const [openDates, setOpenDates] = useState([]);
+    const [seatingCharts, setSeatingCharts] = useState({}); // 🔥 Synced Seating Data
 
     // 從 Calendar 頁面導航過來時的預選活動
     useEffect(() => {
@@ -128,12 +129,18 @@ export default function PracticePage() {
                         setOpenDates(safeDates.map(d => d.Confirmed_date).filter(Boolean));
                     }
 
-                    if (practiceRegs) {
-                        setAllRegs(practiceRegs.map(r => ({
-                            name: r.member_name,
-                            practicedates: r.practice_date
-                        })));
+                    setAllRegs(practiceRegs.map(r => ({
+                        name: r.member_name,
+                        practicedates: r.practice_date
+                    })));
+
+                    // 🔥 Fetch Synced Seating Charts
+                    if (dates && dates.length > 0) {
+                        const dateStrings = dates.map(d => d.display_date);
+                        const seatingData = await fetchSeatingArrangements(dateStrings);
+                        setSeatingCharts(seatingData || {});
                     }
+
                 } catch (e) {
                     console.warn('座位表資料載入失敗:', e.message);
                 }
@@ -288,8 +295,10 @@ export default function PracticePage() {
 
             if (participantsNames.length === 0) return null;
 
-            const participants = users.filter(u => participantsNames.includes(u.Name));
-            const boatData = generateSeating(participants);
+            if (participantsNames.length === 0) return null;
+
+            // 🔥 Use Synced Data if available, otherwise generate locally
+            const boatData = seatingCharts[date] || generateSeating(users.filter(u => participantsNames.includes(u.Name)));
 
             return (
                 <div key={date} className="mb-8">
