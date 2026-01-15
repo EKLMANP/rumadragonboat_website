@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
+  ChevronDown, ChevronUp, MinusCircle, Edit, Check, X, Plus,
   Users, Package, RefreshCw, Settings, Save, FileText, Mail, Shield, MessageSquareWarning, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import {
@@ -43,6 +44,7 @@ const AdminPage = () => {
   const [borrowRecords, setBorrowRecords] = useState([]);
   const [authUsers, setAuthUsers] = useState([]); // 新增使用者管理狀態
   const [bugs, setBugs] = useState([]); // Bug Reports
+  const [bugPage, setBugPage] = useState(1); // Bug pagination
 
   // --- 隊員表單狀態 ---
   const [newFormData, setNewFormData] = useState({
@@ -415,47 +417,49 @@ const AdminPage = () => {
 
 
         {/* 頁籤切換 */}
-        <div className="bg-white rounded-2xl shadow-lg p-2 flex gap-2 mb-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('members')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap
+        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 overflow-x-auto">
+          <div className="flex gap-2 min-w-max md:min-w-0">
+            <button
+              onClick={() => setActiveTab('members')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
               ${activeTab === 'members'
-                ? 'bg-sky-600 text-white shadow-md'
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              } `}
-          >
-            <Users size={20} />
-            隊員資料管理
-          </button>
-          <button
-            onClick={() => setActiveTab('equipment')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Users size={18} />
+              <span className="hidden sm:inline">隊員資料</span>管理
+            </button>
+            <button
+              onClick={() => setActiveTab('equipment')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
               ${activeTab === 'equipment'
-                ? 'bg-sky-600 text-white shadow-md'
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              } `}
-          >
-            <Package size={20} />
-            裝備管理
-          </button>
-          <button
-            onClick={() => setActiveTab('auth_users')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Package size={18} />
+              裝備管理
+            </button>
+            <button
+              onClick={() => setActiveTab('auth_users')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
               ${activeTab === 'auth_users'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              } `}
-          >
-            <Shield size={20} />
-            使用者帳號管理
-          </button>
-          <button
-            onClick={() => setActiveTab('bugs')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Shield size={18} />
+              <span className="hidden sm:inline">使用者</span>帳號管理
+            </button>
+            <button
+              onClick={() => { setActiveTab('bugs'); setBugPage(1); }}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
               ${activeTab === 'bugs' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-          >
-            <MessageSquareWarning size={20} /> Bug修復記錄
-          </button>
+            >
+              <MessageSquareWarning size={18} /> Bug修復
+            </button>
+          </div>
         </div>
 
         {/* ===================================================
@@ -1066,9 +1070,9 @@ const AdminPage = () => {
 
         {/* ==================== 5. Bug修復記錄 Tab ==================== */}
         {activeTab === 'bugs' && (
-          <div className="bg-white rounded-xl shadow-lg border border-rose-100 overflow-hidden animate-fade-in-up">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-lg border border-rose-100 overflow-hidden animate-fade-in-up max-w-full">
+            <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
                 <MessageSquareWarning className="text-rose-500" /> Bug 回報列表
               </h2>
               <button onClick={loadBugReports} className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -1076,16 +1080,21 @@ const AdminPage = () => {
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-600 text-sm font-bold uppercase tracking-wider">
+            {/* Mobile hint */}
+            <div className="md:hidden px-4 py-2 bg-gray-50 text-xs text-gray-500 flex items-center gap-1 border-b">
+              👆 左右滑動查看更多
+            </div>
+
+            <div className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <table className="w-full text-left" style={{ minWidth: '800px' }}>
+                <thead className="bg-gray-50 text-gray-600 text-xs md:text-sm font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="p-4 border-b">狀態</th>
-                    <th className="p-4 border-b">回報日期</th>
-                    <th className="p-4 border-b">回報者</th>
-                    <th className="p-4 border-b w-1/3">描述</th>
-                    <th className="p-4 border-b">截圖</th>
-                    <th className="p-4 border-b text-right">操作</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">狀態</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報日期</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報者</th>
+                    <th className="p-3 md:p-4 border-b">描述</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">截圖</th>
+                    <th className="p-3 md:p-4 border-b text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1096,51 +1105,51 @@ const AdminPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    bugs.map((bug) => (
+                    bugs.slice((bugPage - 1) * 5, bugPage * 5).map((bug) => (
                       <tr key={bug.id} className="hover:bg-gray-50 transition">
-                        <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1
+                        <td className="p-3 md:p-4">
+                          <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1
                           ${bug.is_fixed ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
                             {bug.is_fixed ? <Check size={12} /> : <MessageSquareWarning size={12} />}
                             {bug.is_fixed ? '已修復' : '待處理'}
                           </span>
                         </td>
-                        <td className="p-4 text-sm text-gray-600">
+                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-600 whitespace-nowrap">
                           {new Date(bug.created_at).toLocaleDateString()}
                           <div className="text-xs text-gray-400">{new Date(bug.created_at).toLocaleTimeString()}</div>
                         </td>
-                        <td className="p-4 text-sm font-medium text-gray-800">
-                          <div>{bug.reporter_name}</div>
-                          <div className="text-xs text-gray-400">{bug.reporter_email}</div>
+                        <td className="p-3 md:p-4 text-xs md:text-sm font-medium text-gray-800">
+                          <div className="truncate max-w-[120px] md:max-w-none">{bug.reporter_name}</div>
+                          <div className="text-xs text-gray-400 truncate max-w-[120px] md:max-w-none">{bug.reporter_email}</div>
                         </td>
-                        <td className="p-4 text-sm text-gray-700 whitespace-pre-wrap">{bug.description}</td>
-                        <td className="p-4">
+                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-700 max-w-[200px] truncate">{bug.description}</td>
+                        <td className="p-3 md:p-4">
                           {bug.screenshot_url ? (
                             <a
                               href={bug.screenshot_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-blue-600 hover:underline text-sm font-medium"
+                              className="flex items-center gap-1 text-blue-600 hover:underline text-xs md:text-sm font-medium whitespace-nowrap"
                             >
-                              <ImageIcon size={16} /> 查看截圖 <ExternalLink size={12} />
+                              <ImageIcon size={14} /> 截圖 <ExternalLink size={10} />
                             </a>
                           ) : (
-                            <span className="text-gray-400 text-xs italic">無截圖</span>
+                            <span className="text-gray-400 text-xs italic">無</span>
                           )}
                         </td>
-                        <td className="p-4 text-right">
-                          <label className="flex items-center justify-end cursor-pointer gap-2">
-                            <span className="text-sm text-gray-600">{bug.is_fixed ? '標記未修復' : '標記已修復'}</span>
+                        <td className="p-3 md:p-4 text-right">
+                          <label className="flex items-center justify-end cursor-pointer gap-1 md:gap-2">
+                            <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">{bug.is_fixed ? '未修復' : '已修復'}</span>
                             <input
                               type="checkbox"
                               checked={bug.is_fixed}
                               onChange={() => handleToggleBugStatus(bug.id, bug.is_fixed)}
-                              className="w-5 h-5 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer"
+                              className="w-4 h-4 md:w-5 md:h-5 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer"
                             />
                           </label>
                           {bug.is_fixed && bug.fixed_at && (
                             <div className="text-xs text-gray-400 mt-1">
-                              {new Date(bug.fixed_at).toLocaleDateString()} 修復
+                              {new Date(bug.fixed_at).toLocaleDateString()}
                             </div>
                           )}
                         </td>
@@ -1150,6 +1159,31 @@ const AdminPage = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {bugs.length > 5 && (
+              <div className="p-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
+                <span className="text-sm text-gray-500">
+                  共 {bugs.length} 筆，第 {bugPage} / {Math.ceil(bugs.length / 5)} 頁
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setBugPage(p => Math.max(1, p - 1))}
+                    disabled={bugPage === 1}
+                    className="px-4 py-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-100 transition"
+                  >
+                    ← 上一頁
+                  </button>
+                  <button
+                    onClick={() => setBugPage(p => Math.min(Math.ceil(bugs.length / 5), p + 1))}
+                    disabled={bugPage >= Math.ceil(bugs.length / 5)}
+                    className="px-4 py-2 rounded-lg bg-rose-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-600 transition"
+                  >
+                    下一頁 →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
