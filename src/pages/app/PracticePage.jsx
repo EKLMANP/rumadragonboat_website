@@ -134,10 +134,27 @@ export default function PracticePage() {
                         practicedates: r.practice_date
                     })));
 
-                    // 🔥 Fetch Synced Seating Charts
+                    // 🔥 Fetch Synced Seating Charts (from both old practice_dates and new activities)
+                    const allSeatingDates = [];
+
+                    // Old system dates
                     if (dates && dates.length > 0) {
-                        const dateStrings = dates.map(d => d.display_date);
-                        const seatingData = await fetchSeatingArrangements(dateStrings);
+                        dates.forEach(d => {
+                            if (d.display_date) allSeatingDates.push(d.display_date);
+                        });
+                    }
+
+                    // New activities system dates (boat_practice)
+                    const boatActivities = (acts || []).filter(a => a.type === 'boat_practice');
+                    boatActivities.forEach(a => {
+                        const formattedDate = `${a.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(a.date).getDay()]})`;
+                        if (!allSeatingDates.includes(formattedDate)) {
+                            allSeatingDates.push(formattedDate);
+                        }
+                    });
+
+                    if (allSeatingDates.length > 0) {
+                        const seatingData = await fetchSeatingArrangements(allSeatingDates);
                         setSeatingCharts(seatingData || {});
                     }
 
@@ -279,10 +296,48 @@ export default function PracticePage() {
 
     // Seating chart (for boat practice only)
     const renderSeatingCharts = () => {
-        if (!Array.isArray(openDates) || openDates.length === 0) {
+        // Get boat practice activities from new system
+        const boatActivities = (activities || []).filter(a => a.type === 'boat_practice');
+
+        // Convert registrations to lookup
+        const regsByActivityId = (myRegistrations || []).reduce((acc, reg) => {
+            if (reg.activity_id) acc[reg.activity_id] = true;
+            return acc;
+        }, {});
+
+        // Filter to only show activities user registered for
+        const myBoatActivities = boatActivities.filter(a => regsByActivityId[a.id]);
+
+        if (myBoatActivities.length === 0 && (!Array.isArray(openDates) || openDates.length === 0)) {
             return <div className="text-center text-gray-400 py-8">目前沒有船練座位資料</div>;
         }
 
+        // Render from new activities system
+        const renderedFromActivities = myBoatActivities.slice(0, 3).map(activity => {
+            const formattedDate = `${activity.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(activity.date).getDay()]})`;
+
+            // Look up synced seating chart
+            const boatData = seatingCharts[formattedDate];
+
+            if (!boatData) return null;
+
+            return (
+                <div key={activity.id} className="mb-8">
+                    <SeatVisualizer
+                        boatData={boatData}
+                        date={formattedDate}
+                        location={activity.location || ''}
+                        time={activity.start_time || ''}
+                    />
+                </div>
+            );
+        }).filter(Boolean);
+
+        if (renderedFromActivities.length > 0) {
+            return renderedFromActivities;
+        }
+
+        // Fallback to old system
         return openDates.slice(0, 3).map(date => {
             const safeAllRegs = Array.isArray(allRegs) ? allRegs : [];
             const sessionInfo = practiceSessions.find(s => (s.Confirmed_date || s.Confirmed_Date) === date);
@@ -292,8 +347,6 @@ export default function PracticePage() {
             const participantsNames = safeAllRegs
                 .filter(r => r.practicedates === date)
                 .map(r => r.name);
-
-            if (participantsNames.length === 0) return null;
 
             if (participantsNames.length === 0) return null;
 

@@ -47,6 +47,7 @@ export default function HomePage() {
                         muted
                         loop
                         playsInline
+                        preload="auto"
                         poster={heroImageFallback}
                         className="absolute inset-0 w-full h-full object-cover"
                         style={{ filter: 'brightness(0.4)' }}

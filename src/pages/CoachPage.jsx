@@ -474,6 +474,7 @@ const CoachPage = () => {
       if (registeredNames.length === 0) return;
       const participants = allUsers.filter(u => registeredNames.includes(u.Name));
 
+      let boatData = generateSeating(participants);
       if (!boatData.drummer) boatData.drummer = null;
       newCharts[item.date] = boatData;
 
