@@ -1,144 +1,220 @@
 // src/App.jsx
-import React from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
+// 重構後的主應用程式，包含公開頁面和受保護的會員專區
 
-// 引入頁面元件
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+
+// Auth Provider
+import { AuthProvider } from './contexts/AuthContext';
+// Language Provider
+import { LanguageProvider } from './contexts/LanguageContext';
+
+// 路由保護元件
+import ProtectedRoute, {
+  MemberRoute,
+  ManagementRoute,
+  AdminRoute
+} from './components/ProtectedRoute';
+import { ROLES } from './contexts/AuthContext';
+
+// ===== 公開頁面 =====
+import HomePage from './pages/public/HomePage';
+import LoginPage from './pages/public/LoginPage';
+import FAQPage from './pages/public/FAQPage';
+import NewsPage from './pages/public/NewsPage';
+import NewsDetailPage from './pages/public/NewsDetailPage';
+
+// ===== 會員專區頁面 =====
+import DashboardPage from './pages/app/DashboardPage';
+import PracticePage from './pages/app/PracticePage';
+import EquipmentPage from './pages/app/EquipmentPage';
+import ProfilePage from './pages/app/ProfilePage';
+import AnnouncementsNewsPage from './pages/app/AnnouncementsNewsPage';
+import CalendarPage from './pages/app/CalendarPage';
+import MyJourneyPage from './pages/app/MyJourneyPage';
+
+// ===== 舊有頁面（暫時保留，之後會整合） =====
 import CoachPage from './pages/CoachPage';
 import MemberPage from './pages/MemberPage';
 import AdminPage from './pages/AdminPage';
-import EquipmentPage from './pages/EquipmentPage'; // ✨ 新增這行
+import OldEquipmentPage from './pages/EquipmentPage';
 
-function Home() {
-  const navigate = useNavigate();
-
-  // 處理按鈕點擊與密碼驗證邏輯
-  const handleNavigation = async (path, passwordRequired = false, password = '') => {
-    if (passwordRequired) {
-      const { value: inputVal } = await Swal.fire({
-        title: '請輸入通關密碼',
-        text: 'Please enter the password',
-        input: 'password',
-        showCancelButton: true,
-        confirmButtonText: '確認',
-        cancelButtonText: '取消',
-        confirmButtonColor: '#0ea5e9',
-        cancelButtonColor: '#d33',
-      });
-
-      if (inputVal === password) {
-        navigate(path);
-      } else if (inputVal) { 
-        Swal.fire({
-          icon: 'error',
-          title: 'Oops...',
-          text: '不要亂來啦!',
-          timer: 2000,
-          showConfirmButton: false,
-          showCloseButton: true, 
-        });
-      }
-    } else {
-      navigate(path);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-blue-50 font-sans flex flex-col">
-      {/* Banner 區塊 (保持原樣) */}
-      <div className="relative w-full shadow-md bg-sky-200">
-        <img 
-          src="/banner.jpg" 
-          alt="Dragon Boat Banner" 
-          style={{ width: '100%', height: '250px', objectFit: 'cover' }} 
-        />
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center flex-col">
-          <h1 className="text-3xl md:text-5xl font-bold text-white text-center drop-shadow-lg px-4 leading-tight">
-            龍舟練習槳位產生器
-          </h1>
-          <p className="text-white text-lg md:text-2xl mt-2 opacity-90 font-light text-center">
-            Generator of seat arrangement on the dragon boat
-          </p>
-        </div>
-      </div>
-
-      {/* 功能按鈕區塊 */}
-      <div className="flex-grow flex flex-col items-center justify-center gap-6 p-8 w-full max-w-4xl mx-auto">
-        
-        {/* 1. 隊員按鈕 (Member) */}
-        <button
-          onClick={() => handleNavigation('/member')}
-          className="w-full md:w-2/3 bg-sky-600 hover:bg-sky-700 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
-        >
-          <span>🐉</span> 
-          <div className="flex flex-col items-start text-left">
-            <span>船練報名 & 槳位查詢</span>
-            <span className="text-sm font-normal opacity-80">Practice registration & Check seating</span>
-          </div>
-        </button>
-
-        {/* ✨ 2. 新增：公用裝備查詢 (Equipment) - 放在第二順位 */}
-        <button
-          onClick={() => handleNavigation('/equipment')}
-          className="w-full md:w-2/3 bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
-        >
-          <span>🦺</span> 
-          <div className="flex flex-col items-start text-left">
-            <span>公用裝備查詢</span>
-            <span className="text-sm font-normal opacity-80">Equipment Status Inquiry</span>
-          </div>
-        </button>
-
-        {/* 3. 教練按鈕 (Coach) */}
-        <button
-          onClick={() => handleNavigation('/coach')} 
-          className="w-full md:w-2/3 bg-orange-500 hover:bg-orange-600 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
-        >
-          <span>📋</span> 
-          <div className="flex flex-col items-start text-left">
-            <span>船練開放日期 & 槳位生成</span>
-            <span className="text-sm font-normal opacity-80">Coach Area</span>
-          </div>
-        </button>
-
-        {/* 4. 管理員按鈕 (Admin) */}
-        <button
-          onClick={() => handleNavigation('/admin', true, 'ruma_admin')}
-          className="w-full md:w-2/3 bg-gray-700 hover:bg-gray-800 text-white text-xl font-bold py-5 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-3"
-        >
-          <span>🔧</span> 管理員 / Admin
-        </button>
-
-      </div>
-
-      {/* Footer (保持原樣) */}
-      <footer className="bg-sky-800 text-white text-center py-4 mt-auto">
-        <p>
-          Designed by{' '}
-          <a 
-            href="https://www.instagram.com/ruma_dragonboat" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="underline hover:text-yellow-300 font-bold"
-          >
-            RUMA dragon boat
-          </a>
-        </p>
-      </footer>
+// ===== 尚未建立的佔位頁面 =====
+const PlaceholderPage = ({ title }) => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="text-center">
+      <div className="text-6xl mb-4">🚧</div>
+      <h1 className="text-2xl font-bold text-gray-800 mb-2">{title}</h1>
+      <p className="text-gray-500">此頁面正在建置中...</p>
     </div>
-  );
-}
+  </div>
+);
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/admin" element={<AdminPage />} />
-      <Route path="/coach" element={<CoachPage />} />
-      <Route path="/member" element={<MemberPage />} />
-      {/* ✨ 新增這行路由 */}
-      <Route path="/equipment" element={<EquipmentPage />} />
-    </Routes>
+    <LanguageProvider>
+      <AuthProvider>
+        <Routes>
+          {/* ===== 公開頁面 ===== */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/about" element={<PlaceholderPage title="關於我們" />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/news/:slug" element={<NewsDetailPage />} />
+          <Route path="/articles" element={<Navigate to="/news" replace />} />
+          <Route path="/articles/:id" element={<Navigate to="/news" replace />} />
+          <Route path="/contact" element={<PlaceholderPage title="聯絡我們" />} />
+          <Route path="/faq" element={<FAQPage />} />
+
+          {/* ===== 會員專區（需登入）===== */}
+          {/* 隊員首頁 - 預設頁面 */}
+          <Route
+            path="/app"
+            element={
+              <MemberRoute>
+                <DashboardPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 個人資料（會員） */}
+          <Route
+            path="/app/profile"
+            element={
+              <MemberRoute>
+                <ProfilePage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 船練報名（會員） */}
+          <Route
+            path="/app/practice"
+            element={
+              <MemberRoute>
+                <PracticePage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 公用裝備查詢（會員） */}
+          <Route
+            path="/app/equipment"
+            element={
+              <MemberRoute>
+                <EquipmentPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 我的M點及U幣 - 導向 MyJourneyPage 的 points tab */}
+          <Route
+            path="/app/points"
+            element={
+              <MemberRoute>
+                <MyJourneyPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 最新公告（會員） */}
+          <Route
+            path="/app/announcements"
+            element={
+              <MemberRoute>
+                <AnnouncementsNewsPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 年度日程表（會員） */}
+          <Route
+            path="/app/calendar"
+            element={
+              <MemberRoute>
+                <CalendarPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* 我的龍舟旅程（會員） */}
+          <Route
+            path="/app/journey/*"
+            element={
+              <MemberRoute>
+                <MyJourneyPage />
+              </MemberRoute>
+            }
+          />
+
+          {/* ===== 幹部專區 ===== */}
+          <Route
+            path="/app/coach"
+            element={
+              <ManagementRoute>
+                <CoachPage />
+              </ManagementRoute>
+            }
+          />
+
+          {/* 撰寫文章（幹部） */}
+          <Route
+            path="/app/articles/new"
+            element={
+              <ManagementRoute>
+                <PlaceholderPage title="撰寫文章" />
+              </ManagementRoute>
+            }
+          />
+
+          {/* ===== 管理員專區 ===== */}
+          <Route
+            path="/app/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* 使用者管理（管理員） */}
+          <Route
+            path="/app/admin/users"
+            element={
+              <AdminRoute>
+                <PlaceholderPage title="使用者管理" />
+              </AdminRoute>
+            }
+          />
+
+          {/* ===== 舊版路由（兼容性，之後會移除）===== */}
+          <Route path="/member" element={<MemberPage />} />
+          <Route path="/equipment" element={<OldEquipmentPage />} />
+          <Route path="/coach" element={<CoachPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+
+          {/* 404 Not Found */}
+          <Route
+            path="*"
+            element={
+              <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-8xl mb-4">🌊</div>
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">404</h1>
+                  <p className="text-gray-500 mb-6">找不到這個頁面</p>
+                  <a
+                    href="/"
+                    className="px-6 py-3 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition"
+                  >
+                    返回首頁
+                  </a>
+                </div>
+              </div>
+            }
+          />
+        </Routes>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 
