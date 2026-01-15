@@ -881,7 +881,7 @@ const AdminPage = () => {
                     ) : (
                       users.map((member) => {
                         // 查找該隊員是否已有系統帳號
-                        const authUser = authUsers.find(a => a.email === member.Email);
+                        const authUser = authUsers.find(a => a.email?.toLowerCase() === member.Email?.toLowerCase());
                         const currentRole = authUser?.role || 'member';
 
                         return (

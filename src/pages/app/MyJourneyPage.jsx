@@ -4,10 +4,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/AppLayout';
-import { MapPin, Calendar, Camera, Star, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Calendar, Camera, Star, Clock, CheckCircle, XCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchActivityRegistrations, postData, fetchTrainingRecords } from '../../api/supabaseApi';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../contexts/AuthContext';
+import { compressImage } from '../../utils/imageUtils';
 
 export default function MyJourneyPage() {
     const location = useLocation();
@@ -47,6 +48,20 @@ export default function MyJourneyPage() {
     });
     const [selectedFile, setSelectedFile] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    // 分頁設定
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 5;
+
+    // 計算分頁資料
+    const indexOfLastRecord = currentPage * ITEMS_PER_PAGE;
+    const indexOfFirstRecord = indexOfLastRecord - ITEMS_PER_PAGE;
+    const currentRecords = trainingRecords.slice(indexOfFirstRecord, indexOfLastRecord);
+    const totalPages = Math.ceil(trainingRecords.length / ITEMS_PER_PAGE);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+    };
 
     // 載入資料
     useEffect(() => {
@@ -143,11 +158,40 @@ export default function MyJourneyPage() {
             return Swal.fire('提示', '請輸入自訂訓練項目', 'warning');
         }
 
-        setLoading(true);
+        // 顯示上傳中
+        Swal.fire({
+            title: '上傳中...',
+            text: '正在壓縮並上傳您的訓練紀錄',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
         try {
+            let fileToUpload = selectedFile;
+
+            // 如果有圖片，先進行壓縮
+            if (selectedFile) {
+                try {
+                    const compressedBlob = await compressImage(selectedFile, {
+                        maxWidth: 1280, // 限制最大寬度
+                        quality: 0.7    // 壓縮品質
+                    });
+                    // 將 Blob 轉回 File 物件以符合 postData 的預期
+                    fileToUpload = new File([compressedBlob], selectedFile.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                } catch (err) {
+                    console.warn('圖片壓縮失敗，將使用原圖上傳', err);
+                    // 壓縮失敗則使用原圖，不阻擋流程
+                }
+            }
+
             const result = await postData('addTrainingRecord', {
                 ...uploadForm,
-                file: selectedFile
+                file: fileToUpload
             });
 
             if (result.success) {
@@ -161,14 +205,13 @@ export default function MyJourneyPage() {
                 });
                 setSelectedFile(null);
                 setRefreshKey(prev => prev + 1); // 觸發重新載入
+                setCurrentPage(1); // 回到第一頁
             } else {
                 Swal.fire('失敗', result.message || '送出失敗', 'error');
             }
         } catch (error) {
             console.error(error);
             Swal.fire('失敗', '發生未知錯誤', 'error');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -419,25 +462,54 @@ export default function MyJourneyPage() {
                             <div className="mt-8">
                                 <h3 className="text-lg font-bold text-gray-800 mb-4">我的上傳紀錄</h3>
                                 {trainingRecords.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {trainingRecords.map((record) => (
-                                            <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                                                        <Camera className="text-gray-400" size={24} />
+                                    <>
+                                        <div className="space-y-3">
+                                            {currentRecords.map((record) => (
+                                                <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+                                                            {record.file_url ? (
+                                                                <img src={record.file_url} alt="訓練照片" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <Camera className="text-gray-400" size={24} />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-medium text-gray-800">{record.type} {record.custom_type ? `(${record.custom_type})` : ''}</div>
+                                                            <div className="text-sm text-gray-500">{record.date}</div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <div className="font-medium text-gray-800">{record.type}</div>
-                                                        <div className="text-sm text-gray-500">{record.date}</div>
+                                                    <div className="flex items-center gap-3">
+                                                        {getStatusBadge(record.status)}
+                                                        {record.points > 0 && <span className="text-yellow-600 font-bold">+{record.points} M點</span>}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
-                                                    {getStatusBadge(record.status)}
-                                                    {record.points && <span className="text-yellow-600 font-bold">+{record.points} M點</span>}
-                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* 分頁控制 */}
+                                        {totalPages > 1 && (
+                                            <div className="flex justify-center items-center gap-4 mt-6">
+                                                <button
+                                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                >
+                                                    <ChevronLeft size={20} />
+                                                </button>
+                                                <span className="text-sm font-medium text-gray-600">
+                                                    第 {currentPage} 頁，共 {totalPages} 頁
+                                                </span>
+                                                <button
+                                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                >
+                                                    <ChevronRight size={20} />
+                                                </button>
                                             </div>
-                                        ))}
-                                    </div>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="text-center text-gray-400 py-8">暫無上傳紀錄</div>
                                 )}

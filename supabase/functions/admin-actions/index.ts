@@ -25,9 +25,42 @@ serve(async (req) => {
         if (body.action === 'create_user' || body.action === 'assign_role') {
             console.log('Processing user:', body.email);
 
-            // Check if user already exists
-            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-            const existingUser = existingUsers?.users?.find(u => u.email === body.email);
+            // Improved User Lookup
+            const { data: { users }, error: searchError } = await supabaseAdmin.auth.admin.listUsers();
+            // Note: The above still lists all users (default 50). 
+            // Better approach if listUsers supported filter directly in all versions, 
+            // but for reliability let's fix the logic to handle pagination or direct get if possible.
+            // Actually, listUsers doesn't support email filter directly in older client versions easily.
+            // Let's optimize: try to find the user more robustly.
+
+            // Re-implementation: listing all users is risky. 
+            // Ideally we should use getUserById but we don't have ID. 
+            // We'll stick to listUsers for now but let's add better error logging.
+            // Actually, supabaseAdmin.auth.admin.listUsers() defaults to page 1, 50 users. 
+            // If Kenny is the 51st user, this logic fails!
+            // WE MUST PAGINATE or FILTER.
+
+            // Using a safer approach: Try to create user first? No, that throws error.
+            // Let's try to get user by email correctly.
+            // Since Deno client might vary, let's use a workaround:
+            // We can't easily search by email in admin API without looping pages.
+            // But wait, creating a user that exists returns the existing user error? No it returns error.
+
+            // Let's Fix: Pagination loop to find user
+            let existingUser = null;
+            let page = 1;
+            let hasMore = true;
+
+            while (hasMore && !existingUser) {
+                const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ page: page, per_page: 1000 });
+                if (error || !users || users.length === 0) {
+                    hasMore = false;
+                } else {
+                    existingUser = users.find(u => u.email.toLowerCase() === body.email.toLowerCase());
+                    if (!existingUser && users.length < 1000) hasMore = false;
+                    page++;
+                }
+            }
 
             let userId: string;
 
