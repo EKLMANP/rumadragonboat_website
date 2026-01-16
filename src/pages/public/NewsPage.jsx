@@ -6,15 +6,16 @@ import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { fetchNews } from '../../api/supabaseApi';
-import { Search, ChevronRight, Pin, Loader2 } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, Pin, Loader2 } from 'lucide-react';
 
 // 分類標籤配置
 const CATEGORIES = [
     { id: 'all', label: '全部', labelEn: 'All' },
-    { id: '參賽消息', label: '參賽消息', labelEn: 'Race News' },
-    { id: '隊伍活動', label: '隊伍活動', labelEn: 'Team Events' },
     { id: '體驗招募', label: '體驗招募', labelEn: 'Recruitment' },
-    { id: '訓練回顧', label: '訓練回顧', labelEn: 'Training Review' }
+    { id: '比賽消息', label: '比賽消息', labelEn: 'Race' },
+    { id: '團隊活動', label: '團隊活動', labelEn: 'Team Activity' },
+    { id: '運動相關', label: '運動相關', labelEn: 'Training' },
+    { id: '其他', label: '其他', labelEn: 'Others' }
 ];
 
 export default function NewsPage() {
@@ -24,6 +25,8 @@ export default function NewsPage() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 3; // 3x3 grid
 
     // Debounce 搜尋
     useEffect(() => {
@@ -35,6 +38,7 @@ export default function NewsPage() {
 
     // 載入最新消息
     useEffect(() => {
+        setCurrentPage(1); // Reset page when filters change
         loadNews();
     }, [selectedCategory, debouncedSearch]);
 
@@ -62,6 +66,19 @@ export default function NewsPage() {
     // 分離置頂和普通文章
     const pinnedNews = news.filter(n => n.is_pinned);
     const regularNews = news.filter(n => !n.is_pinned);
+
+    // Pagination logic for regular news
+    const totalPages = Math.ceil(regularNews.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const paginatedNews = regularNews.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+    const goToPage = (page) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+            // Scroll to top of news section
+            window.scrollTo({ top: 400, behavior: 'smooth' });
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] font-sans">
@@ -163,10 +180,54 @@ export default function NewsPage() {
 
                             {/* Regular News */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {regularNews.map(item => (
+                                {paginatedNews.map(item => (
                                     <NewsCard key={item.id} item={item} lang={lang} formatDate={formatDate} />
                                 ))}
                             </div>
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-4 mt-12">
+                                    <button
+                                        onClick={() => goToPage(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${currentPage === 1
+                                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-800 text-white hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        <ChevronLeft size={18} />
+                                        {lang === 'zh' ? '上一頁' : 'Previous'}
+                                    </button>
+
+                                    <div className="flex items-center gap-2">
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                            <button
+                                                key={page}
+                                                onClick={() => goToPage(page)}
+                                                className={`w-10 h-10 rounded-lg font-bold text-sm transition-all ${currentPage === page
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                                                    }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={() => goToPage(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${currentPage === totalPages
+                                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-800 text-white hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        {lang === 'zh' ? '下一頁' : 'Next'}
+                                        <ChevronRight size={18} />
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

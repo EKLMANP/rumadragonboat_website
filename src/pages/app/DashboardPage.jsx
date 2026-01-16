@@ -4,12 +4,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import AppLayout from '../../components/AppLayout';
 import { supabase } from '../../lib/supabase';
 import { fetchActivities } from '../../api/supabaseApi';
 
 export default function DashboardPage() {
     const { userProfile, userRoles, isManagement, isAdmin } = useAuth();
+    const { lang, t } = useLanguage();
     const navigate = useNavigate();
     const [memberName, setMemberName] = useState(null);
     const [stats, setStats] = useState({ totalPoints: 0, monthlyPractices: 0, currentStreak: 0, rank: '-' });
@@ -29,10 +31,10 @@ export default function DashboardPage() {
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .slice(0, 3)
                     .map(a => ({
-                        date: new Date(a.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short' }),
-                        time: a.start_time || '待定',
+                        date: new Date(a.date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US', { month: 'numeric', day: 'numeric', weekday: 'short' }),
+                        time: a.start_time || t('app_tbd'),
                         type: a.name,
-                        location: a.location || '待定'
+                        location: a.location || t('app_tbd')
                     }));
                 setUpcomingActivities(upcoming);
             } catch (error) {
@@ -42,7 +44,7 @@ export default function DashboardPage() {
             }
         };
         loadData();
-    }, []);
+    }, [lang]);
 
     // 嘗試從 members 表取得真實姓名
     useEffect(() => {
@@ -64,12 +66,21 @@ export default function DashboardPage() {
     }, [userProfile]);
 
     // 取得顯示名稱：優先使用 members 表的名字
-    const displayName = memberName || userProfile?.name || '划手';
+    const displayName = memberName || userProfile?.name || (lang === 'zh' ? '划手' : 'Paddler');
 
     // 徽章資料（未來可從資料庫讀取）
     const recentBadges = [
-        { emoji: '🚣', name: '新手啟航' },
+        { emoji: '🚣', name: t('dash_badge_newbie') },
     ];
+
+    // Role display helper
+    const getRoleLabel = (role) => {
+        switch (role) {
+            case 'admin': return t('role_admin');
+            case 'management': return t('role_management');
+            default: return t('role_member');
+        }
+    };
 
     return (
         <AppLayout>
@@ -94,10 +105,10 @@ export default function DashboardPage() {
                             {/* 歡迎文字 */}
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-                                    歡迎回來，{displayName}
+                                    {t('dash_welcome')}{displayName}
                                 </h1>
                                 <p className="text-gray-500 mt-1">
-                                    今天也要努力練習！
+                                    {t('dash_today_msg')}
                                 </p>
                                 <div className="flex flex-wrap gap-2 mt-3">
                                     {userRoles.map(role => (
@@ -110,7 +121,7 @@ export default function DashboardPage() {
                                                     : 'bg-sky-100 text-sky-700'
                                                 }`}
                                         >
-                                            {role === 'admin' ? '管理員' : role === 'management' ? '幹部' : '隊員'}
+                                            {getRoleLabel(role)}
                                         </span>
                                     ))}
                                 </div>
@@ -119,15 +130,15 @@ export default function DashboardPage() {
                         <div className="flex flex-col sm:flex-row gap-3">
                             <Link
                                 to="/app/journey/upload"
-                                className="px-5 py-3 bg-orange-500 text-white font-bold rounded-xl shadow hover:bg-orange-600 transition text-center flex items-center justify-center gap-2"
+                                className="px-4 py-3 bg-orange-500 text-white font-bold rounded-xl shadow hover:bg-orange-600 transition text-center flex items-center justify-center gap-2 text-sm md:text-base whitespace-nowrap"
                             >
-                                📸 上傳自主訓練紀錄
+                                {t('dash_upload_training')}
                             </Link>
                             <Link
                                 to="/app/practice"
-                                className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl shadow hover:bg-sky-700 transition text-center"
+                                className="px-4 py-3 bg-sky-600 text-white font-bold rounded-xl shadow hover:bg-sky-700 transition text-center text-sm md:text-base whitespace-nowrap"
                             >
-                                立即報名活動 →
+                                {t('dash_register_now')}
                             </Link>
                         </div>
                     </div>
@@ -137,19 +148,19 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-sky-600">{stats.totalPoints}</div>
-                        <div className="text-gray-500 text-sm mt-1">累積M點</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_total_points')}</div>
                     </div>
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-green-600">{stats.monthlyPractices}</div>
-                        <div className="text-gray-500 text-sm mt-1">本月練習</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_monthly_practice')}</div>
                     </div>
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-orange-500">{stats.currentStreak}</div>
-                        <div className="text-gray-500 text-sm mt-1">連續週出席</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_streak')}</div>
                     </div>
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-purple-600">{stats.rank === '-' ? '-' : `#${stats.rank}`}</div>
-                        <div className="text-gray-500 text-sm mt-1">月度排名</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_rank')}</div>
                     </div>
                 </div>
 
@@ -157,14 +168,14 @@ export default function DashboardPage() {
                     {/* 近期活動 */}
                     <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">📅 近期開放報名活動</h2>
+                            <h2 className="text-xl font-bold text-gray-800">{t('dash_upcoming')}</h2>
                             <Link to="/app/calendar" className="text-sky-600 hover:underline text-sm">
-                                查看全部 →
+                                {t('app_view_all')}
                             </Link>
                         </div>
                         <div className="space-y-3">
                             {loading ? (
-                                <div className="text-center text-gray-400 py-6">載入中...</div>
+                                <div className="text-center text-gray-400 py-6">{t('app_loading')}</div>
                             ) : upcomingActivities.length > 0 ? (
                                 upcomingActivities.map((practice, index) => (
                                     <div
@@ -185,12 +196,12 @@ export default function DashboardPage() {
                                             onClick={() => navigate('/app/practice')}
                                             className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 transition"
                                         >
-                                            報名
+                                            {t('app_register')}
                                         </button>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-gray-400 py-6">目前無開放報名的活動</div>
+                                <div className="text-center text-gray-400 py-6">{t('dash_no_activities')}</div>
                             )}
                         </div>
                     </div>
@@ -198,9 +209,9 @@ export default function DashboardPage() {
                     {/* 我的M點及U幣 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">🏆 我的M點及U幣</h2>
+                            <h2 className="text-xl font-bold text-gray-800">{t('dash_my_points')}</h2>
                             <Link to="/app/points" className="text-sky-600 hover:underline text-sm">
-                                查看全部 →
+                                {t('app_view_all')}
                             </Link>
                         </div>
                         <div className="space-y-3">
@@ -215,7 +226,7 @@ export default function DashboardPage() {
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-gray-400 py-6">尚無徽章</div>
+                                <div className="text-center text-gray-400 py-6">{t('dash_no_badges')}</div>
                             )}
                         </div>
                     </div>
@@ -226,3 +237,4 @@ export default function DashboardPage() {
         </AppLayout>
     );
 }
+

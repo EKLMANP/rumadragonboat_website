@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase';
 export default function ProtectedRoute({
     children,
     requiredRole = ROLES.MEMBER,
-    redirectTo = '/login',
+    redirectTo = '/',
     requireAuth = true
 }) {
     const { isAuthenticated, hasRoleLevel, initialized, user, userRoles, loading } = useAuth();

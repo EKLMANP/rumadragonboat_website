@@ -11,18 +11,21 @@ import SeatVisualizer from '../../components/SeatVisualizer';
 import AppLayout from '../../components/AppLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // 活動類別定義
 const ACTIVITY_CATEGORIES = [
-    { value: 'boat_practice', label: '船練', color: 'bg-blue-500' },
-    { value: 'team_building', label: 'Team Building', color: 'bg-green-500' },
-    { value: 'race', label: '龍舟比賽', color: 'bg-red-500' },
-    { value: 'internal_competition', label: '內部競賽', color: 'bg-purple-500' }
+    { value: 'all', label_zh: 'All', label_en: 'All', color: 'bg-gray-500' },
+    { value: 'boat_practice', label_zh: '船練', label_en: 'Boat Practice', color: 'bg-blue-500' },
+    { value: 'team_building', label_zh: 'Team Building', label_en: 'Team Building', color: 'bg-green-500' },
+    { value: 'race', label_zh: '龍舟比賽', label_en: 'Race', color: 'bg-red-500' },
+    { value: 'internal_competition', label_zh: '內部競賽', label_en: 'Internal', color: 'bg-purple-500' }
 ];
 
 export default function PracticePage() {
     const { userProfile, user } = useAuth();
     const location = useLocation();
+    const { t, lang } = useLanguage();
 
     // 狀態
     const [users, setUsers] = useState([]);
@@ -30,9 +33,10 @@ export default function PracticePage() {
     const [registrations, setRegistrations] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [activityPage, setActivityPage] = useState(1); // Add pagination state
 
     // 表單狀態
-    const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all'); // Default to All
     const [selectedActivities, setSelectedActivities] = useState([]);
 
     // Legacy data for seating chart
@@ -173,8 +177,10 @@ export default function PracticePage() {
 
     // 篩選可報名的活動 (根據選擇的類別，且未過報名截止日)
     const filteredActivities = activities.filter(act => {
-        if (!selectedCategory) return false;
-        if (act.type !== selectedCategory) return false;
+        if (selectedCategory && selectedCategory !== 'all') {
+            if (act.type !== selectedCategory) return false;
+        }
+
         // 檢查是否已過截止日 (截止日當天 23:59:59 前都算有效)
         if (act.deadline) {
             const deadline = new Date(act.deadline);
@@ -183,6 +189,11 @@ export default function PracticePage() {
         }
         return true;
     });
+
+    // Pagination Logic
+    const itemsPerPage = 5;
+    const totalPages = Math.ceil(filteredActivities.length / itemsPerPage);
+    const displayedActivities = filteredActivities.slice((activityPage - 1) * itemsPerPage, activityPage * itemsPerPage);
 
     const handleActivityCheck = (activityId) => {
         if (selectedActivities.includes(activityId)) {
@@ -278,7 +289,7 @@ export default function PracticePage() {
 
     const getCategoryLabel = (type) => {
         const cat = ACTIVITY_CATEGORIES.find(c => c.value === type);
-        return cat?.label || type;
+        return lang === 'zh' ? cat?.label_zh : cat?.label_en || type;
     };
 
     const getCategoryColor = (type) => {
@@ -309,7 +320,7 @@ export default function PracticePage() {
         const myBoatActivities = boatActivities.filter(a => regsByActivityId[a.id]);
 
         if (myBoatActivities.length === 0 && (!Array.isArray(openDates) || openDates.length === 0)) {
-            return <div className="text-center text-gray-400 py-8">目前沒有船練座位資料</div>;
+            return <div className="text-center text-gray-400 py-8">{lang === 'zh' ? '目前沒有船練座位資料' : 'No seating data available'}</div>;
         }
 
         // Render from new activities system
@@ -374,12 +385,12 @@ export default function PracticePage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
-                                <Ship className="text-sky-600" /> 活動報名
+                                <Ship className="text-sky-600" /> {t('prac_title')}
                             </h1>
                             <p className="text-gray-500 mt-1">
-                                報名活動以及查看槳位安排
+                                {lang === 'zh' ? '報名活動以及查看槳位安排' : 'Register for activities and view seating'}
                                 <span className="text-sm text-gray-400 ml-2">
-                                    (船練、Team Building、龍舟比賽以及內部競賽)
+                                    ({lang === 'zh' ? '船練、Team Building、龍船比賽以及內部競賽' : 'Practice, Team Building, Races, Internal'})
                                 </span>
                             </p>
                         </div>
@@ -387,7 +398,7 @@ export default function PracticePage() {
                             onClick={loadData}
                             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
                         >
-                            🔄 重新載入
+                            🔄 {lang === 'zh' ? '重新載入' : 'Reload'}
                         </button>
                     </div>
                 </div>
@@ -397,13 +408,13 @@ export default function PracticePage() {
                     {/* 報名區塊 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-                            <Filter className="text-sky-600" /> 我要報名
+                            <Filter className="text-sky-600" /> {lang === 'zh' ? '我要報名' : 'Register'}
                         </h2>
 
                         {/* 活動類別選擇 */}
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                活動類別
+                                {lang === 'zh' ? '活動類別' : 'Activity Type'}
                             </label>
                             <select
                                 className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition outline-none text-gray-900"
@@ -411,11 +422,11 @@ export default function PracticePage() {
                                 onChange={(e) => {
                                     setSelectedCategory(e.target.value);
                                     setSelectedActivities([]);
+                                    setActivityPage(1); // Reset page
                                 }}
                             >
-                                <option value="">-- 請選擇活動類別 --</option>
                                 {ACTIVITY_CATEGORIES.map(cat => (
-                                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                    <option key={cat.value} value={cat.value}>{lang === 'zh' ? cat.label_zh : cat.label_en}</option>
                                 ))}
                             </select>
                         </div>
@@ -423,68 +434,89 @@ export default function PracticePage() {
                         {/* 活動選擇 */}
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                活動
+                                {lang === 'zh' ? '活動' : 'Activities'}
                             </label>
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                                {!selectedCategory ? (
+                            <div className="space-y-2 min-h-[300px]">
+                                {filteredActivities.length === 0 ? (
                                     <p className="text-gray-400 text-sm py-4 text-center">
-                                        請先選擇活動類別
-                                    </p>
-                                ) : filteredActivities.length === 0 ? (
-                                    <p className="text-gray-400 text-sm py-4 text-center">
-                                        目前沒有開放報名的{getCategoryLabel(selectedCategory)}活動
+                                        {lang === 'zh' ? `目前沒有開放報名的活動` : `No activities available`}
                                     </p>
                                 ) : (
-                                    filteredActivities.map(activity => {
-                                        const isSelected = selectedActivities.includes(activity.id);
-                                        const isAlreadyRegistered = myRegistrations.some(r => r.activity_id === activity.id);
+                                    <>
+                                        {displayedActivities.map(activity => {
+                                            const isSelected = selectedActivities.includes(activity.id);
+                                            const isAlreadyRegistered = myRegistrations.some(r => r.activity_id === activity.id);
 
-                                        return (
-                                            <label
-                                                key={activity.id}
-                                                className={`
+                                            return (
+                                                <label
+                                                    key={activity.id}
+                                                    className={`
                                                     flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition
                                                     ${isAlreadyRegistered
-                                                        ? 'bg-green-50 border-green-300 opacity-60'
-                                                        : isSelected
-                                                            ? 'bg-sky-50 border-sky-500 shadow-sm'
-                                                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                                    }
+                                                            ? 'bg-green-50 border-green-300 opacity-60'
+                                                            : isSelected
+                                                                ? 'bg-sky-50 border-sky-500 shadow-sm'
+                                                                : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                                        }
                                                 `}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-5 h-5 text-sky-600 rounded focus:ring-sky-500"
-                                                    checked={isSelected}
-                                                    disabled={isAlreadyRegistered}
-                                                    onChange={() => handleActivityCheck(activity.id)}
-                                                />
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-gray-800 flex items-center gap-2">
-                                                        {activity.name}
-                                                        {isAlreadyRegistered && (
-                                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">已報名</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar size={12} /> {activity.date}
-                                                        </span>
-                                                        {activity.location && (
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-5 h-5 text-sky-600 rounded focus:ring-sky-500"
+                                                        checked={isSelected}
+                                                        disabled={isAlreadyRegistered}
+                                                        onChange={() => handleActivityCheck(activity.id)}
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                            {activity.name}
+                                                            {isAlreadyRegistered && (
+                                                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{lang === 'zh' ? '已報名' : 'Registered'}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
                                                             <span className="flex items-center gap-1">
-                                                                <MapPin size={12} /> {activity.location}
+                                                                <Calendar size={12} /> {activity.date}
                                                             </span>
-                                                        )}
-                                                        {activity.start_time && (
-                                                            <span className="flex items-center gap-1 text-sky-600 font-medium">
-                                                                <Clock size={12} /> {activity.start_time}
-                                                            </span>
-                                                        )}
+                                                            {activity.location && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <MapPin size={12} /> {activity.location}
+                                                                </span>
+                                                            )}
+                                                            {activity.start_time && (
+                                                                <span className="flex items-center gap-1 text-sky-600 font-medium">
+                                                                    <Clock size={12} /> {activity.start_time}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </label>
-                                        );
-                                    })
+                                                </label>
+                                            );
+                                        })}
+
+                                        {/* Pagination Controls */}
+                                        {filteredActivities.length > itemsPerPage && (
+                                            <div className="flex items-center justify-end gap-3 mt-4 pt-2">
+                                                <button
+                                                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                                                    disabled={activityPage === 1}
+                                                    className="w-8 h-8 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                                >
+                                                    &lt;
+                                                </button>
+                                                <span className="text-sm text-gray-500">
+                                                    {activityPage} / {totalPages}
+                                                </span>
+                                                <button
+                                                    onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                                                    disabled={activityPage >= totalPages}
+                                                    className="w-8 h-8 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                                >
+                                                    &gt;
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -501,25 +533,25 @@ export default function PracticePage() {
                                 }
                             `}
                         >
-                            <CheckCircle size={20} /> 確定報名
+                            <CheckCircle size={20} /> {lang === 'zh' ? '確定報名' : 'Confirm Registration'}
                         </button>
                     </div>
 
                     {/* 已報名的活動區塊 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-                            <Calendar className="text-orange-500" /> 已報名的活動
+                            <Calendar className="text-orange-500" /> {lang === 'zh' ? '已報名的活動' : 'Registered Activities'}
                         </h2>
 
                         {!user ? (
                             <div className="text-center py-12 bg-gray-50 rounded-xl text-gray-400">
                                 <div className="text-4xl mb-3">🔐</div>
-                                請先登入<br />才能看到你的報名紀錄
+                                {lang === 'zh' ? <>請先登入<br />才能看到你的報名紀錄</> : <>Please login<br />to view your registrations</>}
                             </div>
                         ) : myRegistrations.length === 0 ? (
                             <div className="text-center py-12 bg-gray-50 rounded-xl text-gray-400">
                                 <div className="text-3xl mb-2">🏃‍♂️</div>
-                                目前沒有報名任何活動
+                                {lang === 'zh' ? '目前沒有報名任何活動' : 'No registered activities'}
                             </div>
                         ) : (
                             <div className="space-y-6">
@@ -569,10 +601,10 @@ export default function PracticePage() {
                 {/* 船練座位表 */}
                 <div className="bg-white rounded-2xl shadow-lg p-6">
                     <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        📊 船練座位表
+                        📊 {lang === 'zh' ? '船練座位表' : 'Seating Chart'}
                     </h2>
                     <p className="text-gray-500 text-sm mb-6">
-                        * 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。
+                        {lang === 'zh' ? '* 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。' : '* This is an auto-generated seating based on current registrations. Actual seats may be adjusted by coaches.'}
                     </p>
 
                     <div className="space-y-8">
@@ -586,7 +618,7 @@ export default function PracticePage() {
                 <div className="fixed inset-0 bg-white/60 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center border border-sky-100">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-sky-600 mb-4"></div>
-                        <p className="font-bold text-sky-800">資料同步中...</p>
+                        <p className="font-bold text-sky-800">{lang === 'zh' ? '資料同步中...' : 'Loading...'}</p>
                     </div>
                 </div>
             )}

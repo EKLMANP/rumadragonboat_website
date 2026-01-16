@@ -4,8 +4,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 serve(async (req) => {
     console.log('=== FUNCTION CALLED ===');
 
+    const allowedOrigins = [
+        'https://rumadragonboat.com',
+        'https://www.rumadragonboat.com',
+        'https://uat.rumadragonboat.com',
+        'http://localhost:5173',
+        'http://localhost:3000'
+    ];
+    const origin = req.headers.get('origin') ?? '';
     const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : '',
         'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     };
 

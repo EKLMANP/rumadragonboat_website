@@ -15,7 +15,10 @@ import SeatVisualizer from '../components/SeatVisualizer';
 import AppLayout from '../components/AppLayout';
 import NewsManager from '../components/NewsManager';
 
+import { useLanguage } from '../contexts/LanguageContext';
+
 const CoachPage = () => {
+  const { lang } = useLanguage();
   const navigate = useNavigate();
 
   // --- 頁籤控制 State ---
@@ -64,6 +67,12 @@ const CoachPage = () => {
   const [registrations, setRegistrations] = useState([]);
   const [activityRegistrations, setActivityRegistrations] = useState([]); // New state for raw activity regs
   const [adminMembers, setAdminMembers] = useState([]);
+
+  // --- 活動管理篩選與分頁 State ---
+  const [createdActivityFilter, setCreatedActivityFilter] = useState('all');
+  const [createdPage, setCreatedPage] = useState(1);
+  const [statsFilter, setStatsFilter] = useState('all');
+  const [statsPage, setStatsPage] = useState(1);
 
   // --- 排行榜進階篩選 State ---
   const [rawAttendanceHistory, setRawAttendanceHistory] = useState([]);
@@ -278,6 +287,7 @@ const CoachPage = () => {
     });
 
     if (result.isConfirmed) {
+      console.time('ActivityCreation');
       setLoading(true);
       const activityToCreate = {
         ...newActivity,
@@ -285,27 +295,42 @@ const CoachPage = () => {
         start_time: finalStartTime,
         end_time: finalEndTime
       };
+
+      console.log('Sending create request...', activityToCreate);
       const res = await postData('addActivity', activityToCreate);
+      console.log('Create response:', res);
 
       if (res.success) {
-        // Refresh
-        const updatedActivities = await fetchActivities();
-        setActivities(updatedActivities || []);
+        // Optimistic Update: 直接將新活動加入現有列表，不重新 fetch
+        const createdActivity = res.data;
+        if (createdActivity) {
+          setActivities(prev => [createdActivity, ...prev]);
 
-        // Allow legacy logic refresh too
-        const practiceActivities = (updatedActivities || []).filter(a => a.type === 'boat_practice');
-        setDbDates(practiceActivities.map(a => ({
-          date: formatDateWithDay(a.date),
-          place: a.location,
-          time: a.start_time
-        })));
+          // Legacy Sync (if needed)
+          if (createdActivity.type === 'boat_practice') {
+            const mapLegacyDate = {
+              date: formatDateWithDay(createdActivity.date),
+              place: createdActivity.location,
+              time: createdActivity.start_time
+            };
+            setDbDates(prev => [...prev, mapLegacyDate]);
+          }
+        } else {
+          // Fallback if data is missing for some reason (shouldn't happen with new API)
+          console.warn('No data returned from create, falling back to fetch');
+          const updatedActivities = await fetchActivities();
+          setActivities(updatedActivities || []);
+        }
 
         setNewActivity(prev => ({ ...prev, name: '', date: '', deadline: '', customLocation: '' })); // Reset non-defaults
+        console.timeEnd('ActivityCreation');
+        setLoading(false);
         Swal.fire('成功', '活動已建立', 'success');
       } else {
+        console.timeEnd('ActivityCreation');
+        setLoading(false);
         Swal.fire('失敗', res.message || '建立失敗', 'error');
       }
-      setLoading(false);
     }
   };
 
@@ -641,22 +666,22 @@ const CoachPage = () => {
         {/* 頁面標題 */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
-            📝 幹部專區
+            📝 {lang === 'zh' ? '幹部專區' : 'Management Zone'}
           </h1>
           <p className="text-gray-500 mt-1">
-            設定練習日期、生成座位表、點名與出席統計
+            {lang === 'zh' ? '設定練習日期、生成座位表、點名與出席統計' : 'Manage activities, seating charts, roll calls, and attendance stats'}
           </p>
         </div>
 
         {/* 📌 Tab Navigation (頁籤導航) */}
         <div className="bg-white rounded-2xl shadow-lg p-2 flex flex-wrap md:flex-nowrap gap-2 mb-6">
           {[
-            { id: 'dates', icon: Calendar, label: '活動管理' },
-            { id: 'announcements', icon: Megaphone, label: '建立公告' },
-            { id: 'news', icon: Newspaper, label: '最新消息' },
-            { id: 'seating', icon: Zap, label: '槳位生成' },
-            { id: 'rollcall', icon: ListChecks, label: '點名系統' },
-            { id: 'report', icon: BarChart3, label: '出席報表' },
+            { id: 'dates', icon: Calendar, label: lang === 'zh' ? '活動管理' : 'Activities' },
+            { id: 'announcements', icon: Megaphone, label: lang === 'zh' ? '建立公告' : 'Announcements' },
+            { id: 'news', icon: Newspaper, label: lang === 'zh' ? '最新消息' : 'News' },
+            { id: 'seating', icon: Zap, label: lang === 'zh' ? '槳位生成' : 'Seating' },
+            { id: 'rollcall', icon: ListChecks, label: lang === 'zh' ? '點名系統' : 'Roll Call' },
+            { id: 'report', icon: BarChart3, label: lang === 'zh' ? '出席報表' : 'Reports' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -690,54 +715,59 @@ const CoachPage = () => {
                 {/* 1. 建立活動區塊 */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                   <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <Plus size={24} className="text-orange-500" /> 建立新活動
+                    <Plus size={24} className="text-orange-500" /> {lang === 'zh' ? '建立新活動' : 'Create New Activity'}
                   </h3>
                   <div className="flex flex-col gap-4">
                     {/* 活動名稱 */}
                     <div>
-                      <label className="block text-sm font-bold text-gray-600 mb-1">活動名稱</label>
+                      <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '活動名稱' : 'Activity Name'}</label>
                       <input
                         type="text"
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-300 outline-none text-gray-900"
                         value={newActivity.name}
                         onChange={(e) => setNewActivity({ ...newActivity, name: e.target.value })}
-                        placeholder="例如：平日夜練、端午競賽..."
+                        placeholder={lang === 'zh' ? '例如：平日夜練、端午競賽...' : 'e.g., Night Practice, Dragon Boat Race...'}
                       />
                     </div>
 
-                    {/* 活動類別 */}
                     <div>
-                      <label className="block text-sm font-bold text-gray-600 mb-1">活動類別</label>
+                      <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '活動類別' : 'Category'}</label>
                       <select
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-orange-300 outline-none text-gray-900"
                         value={newActivity.type}
                         onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value })}
                       >
-                        <option value="boat_practice">船練 (Boat Practice)</option>
-                        <option value="team_building">Team Building</option>
-                        <option value="race">龍舟比賽 (Race)</option>
-                        <option value="internal_competition">內部競賽 (Internal Comp)</option>
+                        <option value="boat_practice">{lang === 'zh' ? '船練 (Boat Practice)' : 'Boat Practice'}</option>
+                        <option value="team_building">{lang === 'zh' ? 'Team Building' : 'Team Building'}</option>
+                        <option value="race">{lang === 'zh' ? '龍舟比賽 (Dragon Boat Race)' : 'Dragon Boat Race'}</option>
+                        <option value="internal_competition">{lang === 'zh' ? '內部競賽 (Internal Competition)' : 'Internal Competition'}</option>
                       </select>
                     </div>
 
                     {/* 日期與截止日 */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-bold text-gray-600 mb-1">活動日期</label>
+                        <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '活動日期' : 'Date'}</label>
                         <input
-                          type="date"
-                          className="w-full p-2 border rounded-lg text-gray-900"
+                          type="text"
+                          onFocus={(e) => e.target.type = 'date'}
+                          onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+                          className="w-full p-2 border rounded-lg text-gray-900 placeholder-gray-400"
                           value={newActivity.date}
                           onChange={(e) => setNewActivity({ ...newActivity, date: e.target.value })}
+                          placeholder={lang === 'zh' ? '年/月/日' : 'YYYY/MM/DD'}
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-600 mb-1">報名截止日</label>
+                        <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '報名截止日' : 'Deadline'}</label>
                         <input
-                          type="date"
-                          className="w-full p-2 border rounded-lg text-gray-900"
+                          type="text"
+                          onFocus={(e) => e.target.type = 'date'}
+                          onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+                          className="w-full p-2 border rounded-lg text-gray-900 placeholder-gray-400"
                           value={newActivity.deadline}
                           onChange={(e) => setNewActivity({ ...newActivity, deadline: e.target.value })}
+                          placeholder={lang === 'zh' ? '年/月/日' : 'YYYY/MM/DD'}
                         />
                       </div>
                     </div>
@@ -745,7 +775,7 @@ const CoachPage = () => {
                     {/* 地點與時間 */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-bold text-gray-600 mb-1">地點</label>
+                        <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '地點' : 'Location'}</label>
                         {/* 根據活動類別顯示不同選項 */}
                         {(newActivity.type === 'boat_practice' || newActivity.type === 'race') ? (
                           <>
@@ -754,11 +784,11 @@ const CoachPage = () => {
                               value={newActivity.location}
                               onChange={(e) => setNewActivity({ ...newActivity, location: e.target.value, customLocation: '' })}
                             >
-                              <option value="碧潭 Bitan">碧潭 Bitan</option>
-                              <option value="百齡橋 Bailing Bridge">百齡橋 Bailing Bridge</option>
-                              <option value="蘆洲微風運河 Luzhou">蘆洲微風運河 Luzhou</option>
-                              <option value="大直龍舟碼頭 Dazhi">大直龍舟碼頭 Dazhi</option>
-                              <option value="Other">其他 (自行輸入)</option>
+                              <option value="碧潭 Bitan">{lang === 'zh' ? '碧潭 Bitan' : 'Bitan'}</option>
+                              <option value="百齡橋 Bailing Bridge">{lang === 'zh' ? '百齡橋 Bailing Bridge' : 'Bailing Bridge'}</option>
+                              <option value="蘆洲微風運河 Luzhou">{lang === 'zh' ? '蘆洲微風運河 Luzhou' : 'Luzhou Breeze Canal'}</option>
+                              <option value="大直龍舟碼頭 Dazhi">{lang === 'zh' ? '大直龍舟碼頭 Dazhi' : 'Dazhi Pier'}</option>
+                              <option value="Other">{lang === 'zh' ? '其他 (自行輸入)' : 'Other (Type below)'}</option>
                             </select>
                             {newActivity.location === 'Other' && (
                               <input
@@ -766,7 +796,7 @@ const CoachPage = () => {
                                 className="w-full p-2 border rounded-lg text-gray-900 mt-2"
                                 value={newActivity.customLocation}
                                 onChange={(e) => setNewActivity({ ...newActivity, customLocation: e.target.value })}
-                                placeholder="請輸入自訂地點..."
+                                placeholder={lang === 'zh' ? '請輸入自訂地點...' : 'Enter custom location...'}
                               />
                             )}
                           </>
@@ -776,24 +806,24 @@ const CoachPage = () => {
                             className="w-full p-2 border rounded-lg text-gray-900"
                             value={newActivity.location}
                             onChange={(e) => setNewActivity({ ...newActivity, location: e.target.value })}
-                            placeholder="輸入地點..."
+                            placeholder={lang === 'zh' ? '輸入地點...' : 'Enter location...'}
                           />
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-600 mb-1">時間 (起訖)</label>
+                        <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '時間 (起訖)' : 'Time (Start-End)'}</label>
                         <div className="flex items-center gap-1 h-[38px]">
                           <select
-                            className="w-full p-2 border rounded-lg text-sm text-gray-900"
+                            className="flex-1 min-w-0 p-2 border rounded-lg text-xs sm:text-sm text-gray-900"
                             value={newActivity.start_time}
                             onChange={(e) => setNewActivity({ ...newActivity, start_time: e.target.value })}
                           >
-                            <option value="Pending">待定</option>
+                            <option value="Pending">{lang === 'zh' ? '待定' : 'TBD'}</option>
                             {generateTimeOptions().map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
-                          <span className="text-gray-500">-</span>
+                          <span className="text-gray-500 flex-shrink-0">-</span>
                           <select
-                            className="w-full p-2 border rounded-lg text-sm text-gray-900"
+                            className="flex-1 min-w-0 p-2 border rounded-lg text-xs sm:text-sm text-gray-900"
                             value={newActivity.end_time}
                             onChange={(e) => setNewActivity({ ...newActivity, end_time: e.target.value })}
                           >
@@ -809,177 +839,286 @@ const CoachPage = () => {
                       onClick={handleCreateActivity}
                       className="w-full py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition font-bold mt-4 shadow-md flex items-center justify-center gap-2"
                     >
-                      建立活動 <Save size={18} />
+                      {lang === 'zh' ? '建立活動' : 'Create Activity'} <Save size={18} />
                     </button>
                   </div>
                 </div>
 
                 {/* 2. 已建立活動清單 */}
+                {/* 2. 已建立活動清單 */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <ListChecks size={24} className="text-blue-500" /> 已建立活動 ({activities.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-700 flex items-center gap-2">
+                      <ListChecks size={24} className="text-blue-500" /> {lang === 'zh' ? '已建立活動' : 'Created Activities'} ({activities.length})
+                    </h3>
+                    {/* (a) (b) 篩選 Dropdown */}
+                    <select
+                      value={createdActivityFilter}
+                      onChange={(e) => { setCreatedActivityFilter(e.target.value); setCreatedPage(1); }}
+                      className="p-2 border rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-300 outline-none"
+                    >
+                      <option value="all">{lang === 'zh' ? '全部類別' : 'All Categories'}</option>
+                      <option value="boat_practice">{lang === 'zh' ? '船練' : 'Boat Practice'}</option>
+                      <option value="team_building">{lang === 'zh' ? 'Team Building' : 'Team Building'}</option>
+                      <option value="race">{lang === 'zh' ? '龍舟比賽' : 'Race'}</option>
+                      <option value="internal_competition">{lang === 'zh' ? '內部競賽' : 'Internal Comp'}</option>
+                    </select>
+                  </div>
+
                   <div className="flex-1 min-h-[300px] bg-gray-50 rounded-lg p-2 space-y-2 overflow-y-auto max-h-[500px]">
-                    {activities.length === 0 ? (
-                      <div className="text-center py-10 text-gray-400">目前沒有已建立的活動</div>
-                    ) : (
-                      activities.map((activity) => (
-                        <div key={activity.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2 hover:border-blue-300 transition">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-bold
-                                                ${activity.type === 'boat_practice' ? 'bg-blue-500' :
-                                    activity.type === 'race' ? 'bg-red-500' :
-                                      activity.type === 'team_building' ? 'bg-green-500' : 'bg-purple-500'}
-                                            `}>
-                                  {activity.type === 'boat_practice' ? '船練' :
-                                    activity.type === 'race' ? '比賽' :
-                                      activity.type === 'team_building' ? '團建' : '內賽'}
-                                </span>
-                                <span className="font-bold text-gray-800">{activity.name}</span>
-                              </div>
-                              <div className="flex flex-col text-xs text-gray-500 mt-1 gap-1">
-                                <span className="flex items-center gap-1"><Calendar size={12} /> {activity.date}</span>
-                                <span className="flex items-center gap-1"><MapPin size={12} /> {activity.location}</span>
+                    {(() => {
+                      const filtered = activities.filter(a => createdActivityFilter === 'all' || a.type === createdActivityFilter);
+                      const totalPages = Math.ceil(filtered.length / 5);
+                      const paginated = filtered.slice((createdPage - 1) * 5, createdPage * 5);
+
+                      if (filtered.length === 0) {
+                        return <div className="text-center py-10 text-gray-400">{lang === 'zh' ? '尚無符合條件的活動' : 'No activities found'}</div>;
+                      }
+
+                      return (
+                        <>
+                          {paginated.map((activity) => (
+                            <div key={activity.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2 hover:border-blue-300 transition">
+                              <div className="flex justify-between items-start">
+                                <div className="w-full">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-bold
+                                                        ${activity.type === 'boat_practice' ? 'bg-blue-500' :
+                                        activity.type === 'race' ? 'bg-red-500' :
+                                          activity.type === 'team_building' ? 'bg-green-500' : 'bg-purple-500'}
+                                                    `}>
+                                      {activity.type === 'boat_practice' ? (lang === 'zh' ? '船練' : 'Boat Practice') :
+                                        activity.type === 'race' ? (lang === 'zh' ? '比賽' : 'Race') :
+                                          activity.type === 'team_building' ? (lang === 'zh' ? '團建' : 'Team Building') : (lang === 'zh' ? '內賽' : 'Internal Comp')}
+                                    </span>
+                                    <span className="font-bold text-gray-800">{activity.name}</span>
+                                  </div>
+                                  {/* (c) 地點與日期調整到同一列，中間空兩格 */}
+                                  <div className="flex flex-row items-center text-xs text-gray-500 mt-1 gap-4">
+                                    <span className="flex items-center gap-1"><Calendar size={12} /> {activity.date}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={12} /> {activity.location}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteActivity(activity.id, activity.name)}
+                                  className="text-gray-300 hover:text-red-500 p-1 shrink-0"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleDeleteActivity(activity.id, activity.name)}
-                              className="text-gray-300 hover:text-red-500 p-1"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                          ))}
+
+                          {/* (d) (e) 分頁按鈕 */}
+                          {totalPages > 1 && (
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-gray-200">
+                              <button
+                                onClick={() => setCreatedPage(p => Math.max(1, p - 1))}
+                                disabled={createdPage === 1}
+                                className="px-3 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                上一頁
+                              </button>
+                              <span className="text-xs text-gray-500">第 {createdPage} / {totalPages} 頁</span>
+                              <button
+                                onClick={() => setCreatedPage(p => Math.min(totalPages, p + 1))}
+                                disabled={createdPage === totalPages}
+                                className="px-3 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                下一頁
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
 
               {/* 3. 活動報名統計區塊 */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2 flex items-center gap-2">
-                  <BarChart3 size={20} /> 活動報名統計
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-600 text-sm">
-                        <th className="p-3 rounded-l-lg">活動名稱</th>
-                        <th className="p-3">日期</th>
-                        <th className="p-3">類別</th>
-                        <th className="p-3 rounded-r-lg">已報名人數</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm">
-                      {activities.map(activity => {
-                        const count = activityRegistrations.filter(r => r.activity_id === activity.id).length;
-                        return (
-                          <tr key={activity.id} className="border-b last:border-0 hover:bg-gray-50 transition">
-                            <td className="p-3 font-bold text-gray-800">{activity.name}</td>
-                            <td className="p-3 text-gray-600">{activity.date}</td>
-                            <td className="p-3">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-bold
-                                                ${activity.type === 'boat_practice' ? 'bg-blue-500' :
-                                  activity.type === 'race' ? 'bg-red-500' :
-                                    activity.type === 'team_building' ? 'bg-green-500' : 'bg-purple-500'}
-                                            `}>
-                                {activity.type === 'boat_practice' ? '船練' : activity.type}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <button
-                                className="text-blue-600 font-bold hover:underline"
-                                onClick={() => {
-                                  const registrationList = activityRegistrations
-                                    .filter(r => r.activity_id === activity.id)
-                                    .map((r, idx) => {
-                                      const userInfo = adminMembers.find(u => u.id === r.user_id);
-                                      return {
-                                        regNo: `REG-${activity.id.toString().slice(0, 4).toUpperCase()}-${String(idx + 1).padStart(3, '0')}`,
-                                        name: userInfo?.memberName || userInfo?.email || r.users?.name || 'Unknown',
-                                        email: userInfo?.email || r.users?.email || '-'
-                                      };
-                                    });
+                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                  <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                    <BarChart3 size={20} /> {lang === 'zh' ? '活動報名統計' : 'Registration Stats'}
+                  </h3>
+                  {/* (a) (b) 篩選 Dropdown */}
+                  <select
+                    value={statsFilter}
+                    onChange={(e) => { setStatsFilter(e.target.value); setStatsPage(1); }}
+                    className="p-2 border rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-300 outline-none"
+                  >
+                    <option value="all">{lang === 'zh' ? '全部類別' : 'All Categories'}</option>
+                    <option value="boat_practice">{lang === 'zh' ? '船練' : 'Boat Practice'}</option>
+                    <option value="team_building">{lang === 'zh' ? 'Team Building' : 'Team Building'}</option>
+                    <option value="race">{lang === 'zh' ? '龍舟比賽' : 'Race'}</option>
+                    <option value="internal_competition">{lang === 'zh' ? '內部競賽' : 'Internal Comp'}</option>
+                  </select>
+                </div>
 
-                                  if (registrationList.length === 0) {
-                                    return Swal.fire({
-                                      title: `${activity.name} 報名名單`,
-                                      text: '尚無人報名',
-                                      icon: 'info'
-                                    });
-                                  }
+                <div className="overflow-x-auto min-h-[300px] flex flex-col justify-between">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2 md:hidden">👈 左右滑動查看更多</p>
+                    <table className="w-full text-left min-w-[400px]">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-600 text-xs sm:text-sm">
+                          <th className="p-2 sm:p-3 rounded-l-lg whitespace-nowrap">{lang === 'zh' ? '活動名稱' : 'Activity'}</th>
+                          <th className="p-2 sm:p-3 whitespace-nowrap">{lang === 'zh' ? '日期' : 'Date'}</th>
+                          <th className="p-2 sm:p-3 whitespace-nowrap">{lang === 'zh' ? '類別' : 'Type'}</th>
+                          <th className="p-2 sm:p-3 rounded-r-lg whitespace-nowrap">{lang === 'zh' ? '已報名人數' : 'Registered'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm">
+                        {(() => {
+                          const filtered = activities.filter(a => statsFilter === 'all' || a.type === statsFilter);
+                          const totalPages = Math.ceil(filtered.length / 5);
+                          const paginated = filtered.slice((statsPage - 1) * 5, statsPage * 5);
 
-                                  // 生成表格 HTML
-                                  const tableHtml = `
-                                    <div style="max-height: 300px; overflow-y: auto;">
-                                      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                                        <thead>
-                                          <tr style="background: #f3f4f6;">
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb;">報名編號</th>
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb;">姓名</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          ${registrationList.map(r => `
-                                            <tr style="border-bottom: 1px solid #e5e7eb;">
-                                              <td style="padding: 10px; font-family: monospace; color: #6b7280;">${r.regNo}</td>
-                                              <td style="padding: 10px; font-weight: 500;">${r.name}</td>
-                                            </tr>
-                                          `).join('')}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  `;
+                          if (filtered.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan="4" className="p-4 text-center text-gray-400">{lang === 'zh' ? '尚無符合條件的活動' : 'No activities found'}</td>
+                              </tr>
+                            );
+                          }
 
-                                  Swal.fire({
-                                    title: `${activity.name} 報名名單 (${count})`,
-                                    html: tableHtml,
-                                    width: 500,
-                                    showCancelButton: true,
-                                    confirmButtonText: '📥 下載 Excel',
-                                    confirmButtonColor: '#10b981',
-                                    cancelButtonText: '關閉',
-                                    showCloseButton: true
-                                  }).then((result) => {
-                                    if (result.isConfirmed) {
-                                      // 生成 CSV 格式 (Excel 可開啟)
-                                      const BOM = '\uFEFF'; // UTF-8 BOM for Excel
-                                      const csvContent = BOM + '報名編號,姓名,Email\n' +
-                                        registrationList.map(r => `${r.regNo},${r.name},${r.email}`).join('\n');
+                          return paginated.map(activity => { // Return the mapped array directly
+                            const count = activityRegistrations.filter(r => r.activity_id === activity.id).length;
+                            return (
+                              <tr key={activity.id} className="border-b last:border-0 hover:bg-gray-50 transition">
+                                <td className="p-3 font-bold text-gray-800">{activity.name}</td>
+                                <td className="p-3 text-gray-600">{activity.date}</td>
+                                <td className="p-3">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-bold
+                                                        ${activity.type === 'boat_practice' ? 'bg-blue-500' :
+                                      activity.type === 'race' ? 'bg-red-500' :
+                                        activity.type === 'team_building' ? 'bg-green-500' : 'bg-purple-500'}
+                                                    `}>
+                                    {activity.type === 'boat_practice' ? (lang === 'zh' ? '船練' : 'Boat Practice') :
+                                      activity.type === 'race' ? (lang === 'zh' ? '比賽' : 'Race') :
+                                        activity.type === 'team_building' ? (lang === 'zh' ? '團建' : 'Team Building') : (lang === 'zh' ? '內賽' : 'Internal Comp')}
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <button
+                                    className="text-blue-600 font-bold hover:underline"
+                                    onClick={() => {
+                                      const registrationList = activityRegistrations
+                                        .filter(r => r.activity_id === activity.id)
+                                        .map((r, idx) => {
+                                          const userInfo = adminMembers.find(u => u.id === r.user_id);
+                                          return {
+                                            regNo: `REG-${activity.id.toString().slice(0, 4).toUpperCase()}-${String(idx + 1).padStart(3, '0')}`,
+                                            name: userInfo?.memberName || userInfo?.email || r.users?.name || 'Unknown',
+                                            email: userInfo?.email || r.users?.email || '-'
+                                          };
+                                        });
 
-                                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                      const url = URL.createObjectURL(blob);
-                                      const link = document.createElement('a');
-                                      link.href = url;
-                                      link.download = `${activity.name}_報名名單_${activity.date}.csv`;
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      URL.revokeObjectURL(url);
+                                      if (registrationList.length === 0) {
+                                        return Swal.fire({
+                                          title: `${activity.name} 報名名單`,
+                                          text: '尚無人報名',
+                                          icon: 'info'
+                                        });
+                                      }
+
+                                      // 生成表格 HTML
+                                      const tableHtml = `
+                                            <div style="max-height: 300px; overflow-y: auto;">
+                                            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                                                <thead>
+                                                <tr style="background: #f3f4f6;">
+                                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb;">報名編號</th>
+                                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb;">姓名</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                ${registrationList.map(r => `
+                                                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                                                    <td style="padding: 10px; font-family: monospace; color: #6b7280;">${r.regNo}</td>
+                                                    <td style="padding: 10px; font-weight: 500;">${r.name}</td>
+                                                    </tr>
+                                                `).join('')}
+                                                </tbody>
+                                            </table>
+                                            </div>
+                                        `;
 
                                       Swal.fire({
-                                        icon: 'success',
-                                        title: '下載成功',
-                                        text: '報名名單已下載為 CSV 檔案 (可用 Excel 開啟)',
-                                        timer: 2000,
-                                        showConfirmButton: false
+                                        title: `${activity.name} 報名名單 (${count})`,
+                                        html: tableHtml,
+                                        width: 500,
+                                        showCancelButton: true,
+                                        confirmButtonText: '📥 下載 Excel',
+                                        confirmButtonColor: '#10b981',
+                                        cancelButtonText: '關閉',
+                                        showCloseButton: true
+                                      }).then((result) => {
+                                        if (result.isConfirmed) {
+                                          // 生成 CSV 格式 (Excel 可開啟)
+                                          const BOM = '\uFEFF'; // UTF-8 BOM for Excel
+                                          const csvContent = BOM + '報名編號,姓名,Email\n' +
+                                            registrationList.map(r => `${r.regNo},${r.name},${r.email}`).join('\n');
+
+                                          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                          const url = URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = `${activity.name}_報名名單_${activity.date}.csv`;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          URL.revokeObjectURL(url);
+
+                                          Swal.fire({
+                                            icon: 'success',
+                                            title: '下載成功',
+                                            text: '報名名單已下載為 CSV 檔案 (可用 Excel 開啟)',
+                                            timer: 2000,
+                                            showConfirmButton: false
+                                          });
+                                        }
                                       });
-                                    }
-                                  });
-                                }}
-                              >
-                                {count} 人 (查看名單)
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {activities.length === 0 && <div className="p-4 text-center text-gray-400">尚無活動資料</div>}
+                                    }}
+                                  >
+                                    {count} {lang === 'zh' ? '人 (查看名單)' : ' (View List)'}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          }); // End of map
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* (c) 分頁按鈕 */}
+                  {(() => {
+                    const filtered = activities.filter(a => statsFilter === 'all' || a.type === statsFilter);
+                    const totalPages = Math.ceil(filtered.length / 5);
+
+                    if (totalPages <= 1) return null;
+
+                    return (
+                      <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-100">
+                        <button
+                          onClick={() => setStatsPage(p => Math.max(1, p - 1))}
+                          disabled={statsPage === 1}
+                          className="px-3 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {lang === 'zh' ? '上一頁' : 'Prev'}
+                        </button>
+                        <span className="text-xs text-gray-500">{lang === 'zh' ? `第 ${statsPage} / ${totalPages} 頁` : `Page ${statsPage} of ${totalPages}`}</span>
+                        <button
+                          onClick={() => setStatsPage(p => Math.min(totalPages, p + 1))}
+                          disabled={statsPage === totalPages}
+                          className="px-3 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {lang === 'zh' ? '下一頁' : 'Next'}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1031,12 +1170,12 @@ const CoachPage = () => {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-gray-600 mb-1">內容</label>
+                      <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '內容' : 'Content'}</label>
                       <textarea
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-200 outline-none h-32 text-gray-900"
                         value={newAnnouncement.content}
                         onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
-                        placeholder="輸入公告詳細內容..."
+                        placeholder={lang === 'zh' ? '輸入公告詳細內容...' : 'Enter details...'}
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -1047,13 +1186,13 @@ const CoachPage = () => {
                         onChange={(e) => setNewAnnouncement({ ...newAnnouncement, pinned: e.target.checked })}
                         className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500"
                       />
-                      <label htmlFor="pinned" className="text-sm font-medium text-gray-700 select-none cursor-pointer">置頂此公告</label>
+                      <label htmlFor="pinned" className="text-sm font-medium text-gray-700 select-none cursor-pointer">{lang === 'zh' ? '置頂此公告' : 'Pin Announcement'}</label>
                     </div>
                     <button
                       onClick={handleCreateAnnouncement}
                       className="w-full py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-bold shadow-md flex items-center justify-center gap-2"
                     >
-                      發布公告 <Save size={18} />
+                      {lang === 'zh' ? '發布公告' : 'Post Announcement'} <Save size={18} />
                     </button>
                   </div>
                 </div>
@@ -1061,18 +1200,18 @@ const CoachPage = () => {
                 {/* 2. 公告列表 */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                   <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <ListChecks size={24} className="text-gray-500" /> 已發布公告 ({announcements.length})
+                    <ListChecks size={24} className="text-gray-500" /> {lang === 'zh' ? '已發布公告' : 'Posted Announcements'} ({announcements.length})
                   </h3>
                   <div className="flex-1 overflow-y-auto max-h-[500px] space-y-3 bg-gray-50 p-3 rounded-lg">
                     {announcements.length === 0 ? (
-                      <div className="text-center py-10 text-gray-400">尚無公告</div>
+                      <div className="text-center py-10 text-gray-400">{lang === 'zh' ? '尚無公告' : 'No announcements'}</div>
                     ) : (
                       announcements.map((item) => (
                         <div key={item.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:border-red-200 transition">
                           <div className="flex justify-between items-start">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
-                                {item.pinned && <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">置頂</span>}
+                                {item.pinned && <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">{lang === 'zh' ? '置頂' : 'Pinned'}</span>}
                                 <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-bold">{item.category}</span>
                                 <span className="text-xs text-gray-400">{item.date}</span>
                               </div>
@@ -1117,16 +1256,16 @@ const CoachPage = () => {
               )}
 
               <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Zap className="text-orange-500" /> 槳位生成中心</h2>
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Zap className="text-orange-500" /> {lang === 'zh' ? '槳位生成中心' : 'Seating Generation'}</h2>
                 <div className="flex gap-4">
-                  <button onClick={handleClearPast} className="px-6 py-2 border-2 border-red-100 text-red-500 rounded-full hover:bg-red-50 font-bold transition">清除過期資料</button>
+                  <button onClick={handleClearPast} className="px-6 py-2 border-2 border-red-100 text-red-500 rounded-full hover:bg-red-50 font-bold transition">{lang === 'zh' ? '清除過期資料' : 'Clear Past Data'}</button>
                   <button onClick={handleGenerateSeating} className="px-8 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition font-bold flex items-center gap-2">
-                    <Zap size={20} fill="currentColor" /> 生成槳位
+                    <Zap size={20} fill="currentColor" /> {lang === 'zh' ? '生成槳位' : 'Generate Seating'}
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-12">
-                {Object.keys(seatingCharts).length === 0 ? <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300"><p className="text-gray-400">尚未生成，請點擊上方按鈕...</p></div> :
+                {Object.keys(seatingCharts).length === 0 ? <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300"><p className="text-gray-400">{lang === 'zh' ? '尚未生成，請點擊上方按鈕...' : 'No charts yet. Click generate...'}</p></div> :
                   Object.entries(seatingCharts).map(([date, boatData]) => {
                     const targetDateInfo = dbDates.find(d => d.date === date);
                     const placeInfo = targetDateInfo ? targetDateInfo.place : '';
@@ -1162,13 +1301,13 @@ const CoachPage = () => {
               <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <div className="mb-6 flex items-center justify-between">
                   <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <ClipboardCheck className="text-green-600" /> 選擇場次進行點名
+                    <ClipboardCheck className="text-green-600" /> {lang === 'zh' ? '選擇場次進行點名' : 'Select Session for Roll Call'}
                   </h3>
                 </div>
 
                 {dbDates.length === 0 ? (
                   <div className="text-center py-12 text-gray-400 border-2 border-dashed rounded-lg">
-                    目前沒有任何練習場次，請先至「日期管理」新增。
+                    {lang === 'zh' ? '目前沒有任何練習場次，請先至「日期管理」新增。' : 'No practice sessions available. Add one in "Activities".'}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1187,7 +1326,7 @@ const CoachPage = () => {
                           <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
                         </div>
                         <button className="mt-2 w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg group-hover:bg-green-600 group-hover:text-white transition">
-                          開始點名
+                          {lang === 'zh' ? '開始點名' : 'Start Roll Call'}
                         </button>
                       </div>
                     ))}
@@ -1213,17 +1352,17 @@ const CoachPage = () => {
                     <Trophy size={24} />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800">出席率排行榜</h3>
-                    <p className="text-xs text-gray-500">Total Sessions: <span className="font-bold text-blue-600 text-sm">{totalSessionsInPeriod}</span> 次練習</p>
+                    <h3 className="text-xl font-bold text-gray-800">{lang === 'zh' ? '出席率排行榜' : 'Attendance Leaderboard'}</h3>
+                    <p className="text-xs text-gray-500">Total Sessions: <span className="font-bold text-blue-600 text-sm">{totalSessionsInPeriod}</span> {lang === 'zh' ? '次練習' : 'Sessions'}</p>
                   </div>
                 </div>
 
                 {/* 篩選器群組 */}
                 <div className="flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
                   <div className="flex bg-white rounded-md shadow-sm p-1 border border-gray-200">
-                    <button onClick={() => setReportType('year')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'year' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>年</button>
-                    <button onClick={() => setReportType('month')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'month' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>月</button>
-                    <button onClick={() => setReportType('day')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'day' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>日</button>
+                    <button onClick={() => setReportType('year')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'year' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '年' : 'Year'}</button>
+                    <button onClick={() => setReportType('month')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'month' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '月' : 'Month'}</button>
+                    <button onClick={() => setReportType('day')} className={`px-3 py-1 rounded text-xs font-bold transition ${reportType === 'day' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '日' : 'Day'}</button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1234,7 +1373,7 @@ const CoachPage = () => {
                         className="pl-2 pr-6 py-1.5 bg-white border border-gray-300 rounded text-sm font-bold outline-none focus:ring-2 focus:ring-blue-300 text-gray-800"
                       >
                         {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => (
-                          <option key={y} value={y}>{y} 年</option>
+                          <option key={y} value={y}>{y} {lang === 'zh' ? '年' : 'Year'}</option>
                         ))}
                       </select>
                     )}
@@ -1245,7 +1384,7 @@ const CoachPage = () => {
                         className="pl-2 pr-6 py-1.5 bg-white border border-gray-300 rounded text-sm font-bold outline-none focus:ring-2 focus:ring-blue-300 text-gray-800"
                       >
                         {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                          <option key={m} value={m}>{m} 月</option>
+                          <option key={m} value={m}>{m} {lang === 'zh' ? '月' : 'Month'}</option>
                         ))}
                       </select>
                     )}
@@ -1406,9 +1545,9 @@ const CoachPage = () => {
               </div>
 
               <div className="p-4 border-t bg-white flex gap-3">
-                <button onClick={() => setShowAttendanceModal(false)} className="flex-1 py-3 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">取消</button>
+                <button onClick={() => setShowAttendanceModal(false)} className="flex-1 py-3 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">{lang === 'zh' ? '取消' : 'Cancel'}</button>
                 <button onClick={submitAttendance} className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-lg shadow-md hover:shadow-lg hover:from-green-700 hover:to-emerald-700 flex items-center justify-center gap-2 transition">
-                  <Save size={18} /> 確認送出 ({attendanceList.length}人)
+                  <Save size={18} /> {lang === 'zh' ? '確認送出' : 'Confirm'} ({attendanceList.length} {lang === 'zh' ? '人' : ''})
                 </button>
               </div>
             </div>
@@ -1421,7 +1560,7 @@ const CoachPage = () => {
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
               <div className="bg-gray-100 p-4 flex justify-between items-center border-b">
                 <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                  <Edit size={20} className="text-blue-600" /> 編輯公告
+                  <Edit size={20} className="text-blue-600" /> {lang === 'zh' ? '編輯公告' : 'Edit Announcement'}
                 </h3>
                 <button
                   onClick={() => setEditingAnnouncement(null)}
@@ -1432,7 +1571,7 @@ const CoachPage = () => {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-600 mb-1">公告標題</label>
+                  <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '公告標題' : 'Title'}</label>
                   <input
                     type="text"
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none text-gray-900"
@@ -1442,7 +1581,7 @@ const CoachPage = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-gray-600 mb-1">日期</label>
+                    <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '日期' : 'Date'}</label>
                     <input
                       type="date"
                       className="w-full p-2 border rounded-lg text-gray-900"
@@ -1451,7 +1590,7 @@ const CoachPage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-600 mb-1">分類</label>
+                    <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '分類' : 'Category'}</label>
                     <select
                       className="w-full p-2 border rounded-lg text-gray-900"
                       value={editingAnnouncement.category}
@@ -1466,7 +1605,7 @@ const CoachPage = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-600 mb-1">內容</label>
+                  <label className="block text-sm font-bold text-gray-600 mb-1">{lang === 'zh' ? '內容' : 'Content'}</label>
                   <textarea
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none h-32 text-gray-900"
                     value={editingAnnouncement.content}
@@ -1481,7 +1620,7 @@ const CoachPage = () => {
                     onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, pinned: e.target.checked })}
                     className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                   />
-                  <label htmlFor="edit-pinned" className="text-sm font-medium text-gray-700 select-none cursor-pointer">置頂此公告</label>
+                  <label htmlFor="edit-pinned" className="text-sm font-medium text-gray-700 select-none cursor-pointer">{lang === 'zh' ? '置頂此公告' : 'Pin Announcement'}</label>
                 </div>
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
@@ -1489,13 +1628,13 @@ const CoachPage = () => {
                   onClick={() => setEditingAnnouncement(null)}
                   className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition"
                 >
-                  取消
+                  {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>
                 <button
                   onClick={handleUpdateAnnouncement}
                   className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow flex items-center gap-2"
                 >
-                  <Save size={18} /> 儲存更新
+                  <Save size={18} /> {lang === 'zh' ? '儲存更新' : 'Save Changes'}
                 </button>
               </div>
             </div>
@@ -1507,7 +1646,7 @@ const CoachPage = () => {
           <div className="fixed inset-0 bg-white/60 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-sky-100">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
-              <p className="font-bold text-gray-700">處理中...</p>
+              <p className="font-bold text-gray-700">{lang === 'zh' ? '處理中...' : 'Processing...'}</p>
             </div>
           </div>
         )}

@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
  * @param {number} ms - 超時毫秒數
  * @param {*} fallback - 超時時的回傳值
  */
-const withTimeout = async (promise, ms = 5000, fallback = null) => {
+const withTimeout = async (promise, ms = 3000, fallback = null) => {
     let timeoutId;
     const timeoutPromise = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
@@ -53,7 +53,7 @@ export const fetchAllData = async () => {
                 supabase.from('equipment_inventory').select('*'),
                 supabase.from('borrow_records').select('*').order('created_at', { ascending: false })
             ]),
-            8000, // 8 秒超時
+            8000, // 8 秒超時 (大量資料)
             null
         );
 
@@ -121,6 +121,31 @@ export const fetchUsers = async () => {
 };
 
 /**
+ * 取得隊員基本資料 (用於顯示頭像等) - 具備 Timeout 保護
+ */
+export const fetchMemberBasicInfo = async () => {
+    try {
+        const result = await withTimeout(
+            supabase
+                .from('members')
+                .select('name, avatar_url')
+                .order('name'),
+            3000,
+            { data: [], error: null }
+        );
+
+        if (result?.error) {
+            console.error("Error fetching member basic info:", result.error);
+            return [];
+        }
+        return result?.data || [];
+    } catch (error) {
+        console.error("Error fetching member basic info:", error);
+        return [];
+    }
+};
+
+/**
  * 取得練習日期（對應 fetchDates）
  */
 export const fetchDates = async () => {
@@ -165,19 +190,26 @@ export const fetchRegistrations = async () => {
  * 取得出席紀錄（對應 fetchAttendance）
  */
 export const fetchAttendance = async () => {
-    const { data, error } = await supabase
-        .from('attendance')
-        .select('*');
+    try {
+        const result = await withTimeout(
+            supabase.from('attendance').select('*'),
+            3000,
+            { data: [], error: null }
+        );
 
-    if (error) {
+        if (result?.error) {
+            console.error("Error fetching attendance:", result.error);
+            return [];
+        }
+
+        return (result?.data || []).map(a => ({
+            Date: a.practice_date,
+            Name: a.member_name
+        }));
+    } catch (error) {
         console.error("Error fetching attendance:", error);
         return [];
     }
-
-    return data.map(a => ({
-        Date: a.practice_date,
-        Name: a.member_name
-    }));
 };
 
 /**
@@ -190,7 +222,7 @@ export const fetchActivities = async () => {
                 .from('activities')
                 .select('*')
                 .order('date', { ascending: false }),
-            5000,
+            3000,
             { data: [], error: null }
         );
 
@@ -217,7 +249,7 @@ export const fetchActivityRegistrations = async () => {
                     *,
                     activities (name, date, type, location, start_time)
                 `),
-            5000,
+            3000,
             { data: [], error: null }
         );
 
@@ -236,17 +268,26 @@ export const fetchActivityRegistrations = async () => {
  * 取得公告列表
  */
 export const fetchAnnouncements = async () => {
-    const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false });
+    try {
+        const result = await withTimeout(
+            supabase
+                .from('announcements')
+                .select('*')
+                .order('pinned', { ascending: false })
+                .order('created_at', { ascending: false }),
+            3000,
+            { data: [], error: null }
+        );
 
-    if (error) {
+        if (result?.error) {
+            console.error("Error fetching announcements:", result.error);
+            return [];
+        }
+        return result?.data || [];
+    } catch (error) {
         console.error("Error fetching announcements:", error);
         return [];
     }
-    return data;
 };
 
 // =====================================================
@@ -378,7 +419,7 @@ const unregisterFromPractice = async (name, date) => {
 // =====================================================
 
 const createActivity = async (params) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('activities')
         .insert({
             name: params.name,
@@ -389,12 +430,14 @@ const createActivity = async (params) => {
             location: params.location,
             deadline: params.deadline || null,
             description: params.description || ''
-        });
+        })
+        .select()
+        .single();
 
     if (error) {
         return { success: false, message: error.message };
     }
-    return { success: true };
+    return { success: true, data: data };
 };
 
 const deleteActivity = async (id) => {
@@ -820,12 +863,19 @@ export const adminUpdateUserRole = async (userId, newRole) => {
  */
 export const adminListUsers = async () => {
     try {
-        const { data, error } = await supabase.rpc('admin_list_users_with_roles');
+        const result = await withTimeout(
+            supabase.rpc('admin_list_users_with_roles'),
+            5000, // RPC 可以稍長一點
+            null
+        );
 
-        if (error) throw error;
+        if (!result || result.error) {
+            console.warn('adminListUsers timeout or error');
+            return { success: true, data: { users: [] } }; // 返回空但成功，避免阻塞 UI
+        }
 
         // 轉換為前端期望的格式
-        const users = (data || []).map(u => ({
+        const users = (result.data || []).map(u => ({
             id: u.user_id,
             email: u.email,
             memberName: u.member_name,
@@ -836,7 +886,7 @@ export const adminListUsers = async () => {
         return { success: true, data: { users } };
     } catch (error) {
         console.error('Admin list users failed:', error);
-        return { success: false, message: error.message || '操作失敗' };
+        return { success: true, data: { users: [] } }; // 返回空但成功，避免阻塞 UI
     }
 };
 
@@ -1104,13 +1154,17 @@ export const fetchNews = async ({ category, search, limit = 20 } = {}) => {
             query = query.limit(limit);
         }
 
-        const { data, error } = await query;
+        const result = await withTimeout(
+            query,
+            5000,
+            { data: [], error: null }
+        );
 
-        if (error) {
-            console.error('Error fetching news:', error);
+        if (result?.error) {
+            console.error('Error fetching news:', result.error);
             return [];
         }
-        return data || [];
+        return result?.data || [];
     } catch (error) {
         console.error('Error fetching news:', error);
         return [];
@@ -1146,16 +1200,20 @@ export const fetchNewsDetail = async (slug) => {
  */
 export const fetchAllNews = async () => {
     try {
-        const { data, error } = await supabase
-            .from('news')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const result = await withTimeout(
+            supabase
+                .from('news')
+                .select('*')
+                .order('created_at', { ascending: false }),
+            5000,
+            { data: [], error: null }
+        );
 
-        if (error) {
-            console.error('Error fetching all news:', error);
+        if (result?.error) {
+            console.error('Error fetching all news:', result.error);
             return [];
         }
-        return data || [];
+        return result?.data || [];
     } catch (error) {
         console.error('Error fetching all news:', error);
         return [];

@@ -12,6 +12,7 @@ import {
   fetchBugReports, updateBugReportStatus
 } from '../api/supabaseApi';
 import AppLayout from '../components/AppLayout';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // --- 選項定義 ---
 const POSITION_OPTIONS = [
@@ -31,6 +32,7 @@ const COUNT_OPTIONS_1_10 = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const AdminPage = () => {
   const navigate = useNavigate();
+  const { t, lang } = useLanguage();
 
 
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,7 @@ const AdminPage = () => {
   const [bugPage, setBugPage] = useState(1); // Bug pagination
   const [memberPage, setMemberPage] = useState(1); // Member list pagination
   const [rolePage, setRolePage] = useState(1); // Role management pagination
+  const [expandedBugId, setExpandedBugId] = useState(null); // Bug description expand state
 
   // --- 隊員表單狀態 ---
   const [newFormData, setNewFormData] = useState({
@@ -136,8 +139,20 @@ const AdminPage = () => {
   // ==========================================
   // 2. 資料讀取
   // ==========================================
-  const loadData = async () => {
-    setLoading(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // 模糊搜尋隊員
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm) return true;
+    const lowerTerm = searchTerm.toLowerCase();
+    return (
+      (user.Name && user.Name.toLowerCase().includes(lowerTerm)) ||
+      (user.Email && user.Email.toLowerCase().includes(lowerTerm))
+    );
+  });
+
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // 使用輕量查詢取代 fetchAllData，避免超時
       const { supabase } = await import('../lib/supabase');
@@ -170,12 +185,12 @@ const AdminPage = () => {
     } catch (e) {
       console.error("載入失敗:", e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  const loadAuthUsers = async () => {
-    setLoading(true);
+  const loadAuthUsers = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await adminListUsers();
       if (res.success && res.data?.users) {
@@ -188,7 +203,7 @@ const AdminPage = () => {
       console.error('載入 Auth Users 失敗:', e);
       setAuthUsers([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -247,14 +262,46 @@ const AdminPage = () => {
 
     setLoading(true);
     const res = await postData('addUser', newFormData);
-    setLoading(false);
 
     if (res.success) {
+      // 顯示成功訊息 (先顯示，不阻塞後續操作)
       Swal.fire({ icon: 'success', title: '新增成功', timer: 1500, showConfirmButton: false });
-      Swal.fire({ icon: 'success', title: '新增成功', timer: 1500, showConfirmButton: false });
+
+      // Optimistic UI: 立即更新本地 state
+      setUsers(prev => [...prev, {
+        Name: newFormData.Name,
+        Email: newFormData.Email || '',
+        Weight: newFormData.Weight || '',
+        Position: newFormData.Position,
+        Skill_Rating: newFormData.Skill_Rating
+      }]);
+
+      // 清空表單
       setNewFormData({ Name: '', Email: '', Weight: '', Position: POSITION_OPTIONS[0], Skill_Rating: '1' });
-      loadData();
+      setLoading(false);
+
+      // 背景非同步操作 (不阻塞 UI)
+      (async () => {
+        // 如果有 Email，嘗試建立 auth 帳號 (帶超時保護)
+        if (newFormData.Email) {
+          try {
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 5000)
+            );
+            await Promise.race([
+              adminCreateUser(newFormData.Email, '000000', newFormData.Name, 'member'),
+              timeoutPromise
+            ]);
+          } catch (e) {
+            console.warn('自動建立帳號失敗或超時:', e.message);
+          }
+        }
+
+        // 背景重新載入資料 (平行執行，靜默模式)
+        Promise.all([loadData(true), loadAuthUsers(true)]).catch(console.error);
+      })();
     } else {
+      setLoading(false);
       Swal.fire('新增失敗', res.message, 'error');
     }
   };
@@ -399,10 +446,10 @@ const AdminPage = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
-                🔧 管理員後台
+                {t('admin_title')}
               </h1>
               <p className="text-gray-500 mt-1">
-                建立隊員資料與更新公用裝備狀態
+                {t('admin_desc')}
               </p>
             </div>
             <button
@@ -411,7 +458,7 @@ const AdminPage = () => {
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center gap-2 disabled:opacity-50"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              重新載入
+              {t('admin_reload')}
             </button>
           </div>
         </div>
@@ -430,7 +477,7 @@ const AdminPage = () => {
                 } `}
             >
               <Users size={18} />
-              <span className="hidden sm:inline">隊員資料</span>管理
+              <span className="hidden sm:inline">{lang === 'zh' ? '隊員資料' : 'Member'}</span>{lang === 'zh' ? '管理' : 'Management'}
             </button>
             <button
               onClick={() => setActiveTab('equipment')}
@@ -441,7 +488,7 @@ const AdminPage = () => {
                 } `}
             >
               <Package size={18} />
-              裝備管理
+              {t('admin_tab_equipment')}
             </button>
             <button
               onClick={() => setActiveTab('auth_users')}
@@ -452,14 +499,14 @@ const AdminPage = () => {
                 } `}
             >
               <Shield size={18} />
-              <span className="hidden sm:inline">使用者</span>帳號管理
+              <span className="hidden sm:inline">{lang === 'zh' ? '使用者' : 'User'}</span>{lang === 'zh' ? '帳號管理' : 'Accounts'}
             </button>
             <button
               onClick={() => { setActiveTab('bugs'); setBugPage(1); }}
               className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
               ${activeTab === 'bugs' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
             >
-              <MessageSquareWarning size={18} /> Bug修復
+              <MessageSquareWarning size={18} /> {t('admin_tab_bugs')}
             </button>
           </div>
         </div>
@@ -473,22 +520,22 @@ const AdminPage = () => {
 
               {/* 左：輸入隊員資料 */}
               <div className="w-full md:w-1/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100 sticky top-4">
-                <h2 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2">輸入隊員資料</h2>
+                <h2 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2">{t('admin_add_member')}</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">姓名</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_name')}</label>
                     <input
                       name="Name"
                       value={newFormData.Name}
                       onChange={handleNewFormChange}
                       className="w-full p-2 border rounded focus:border-purple-500 outline-none text-gray-800"
-                      placeholder="輸入姓名"
+                      placeholder={lang === 'zh' ? '輸入姓名' : 'Enter name'}
                     />
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Email</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_email')}</label>
                     <input
                       name="Email"
                       type="email"
@@ -500,19 +547,19 @@ const AdminPage = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">體重 (kg)</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_weight')}</label>
                     <input
                       name="Weight"
                       type="number"
                       value={newFormData.Weight}
                       onChange={handleNewFormChange}
                       className="w-full p-2 border rounded focus:border-purple-500 outline-none text-gray-800"
-                      placeholder="輸入體重"
+                      placeholder={lang === 'zh' ? '輸入體重' : 'Enter weight'}
                     />
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">划船位置</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_position')}</label>
                     <select
                       name="Position"
                       value={newFormData.Position}
@@ -526,7 +573,7 @@ const AdminPage = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">技術評分 (1-5)</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_skill')}</label>
                     <select
                       name="Skill_Rating"
                       value={newFormData.Skill_Rating}
@@ -541,24 +588,46 @@ const AdminPage = () => {
                     onClick={handleAddUser}
                     className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 mt-4 shadow-sm"
                   >
-                    <Plus size={20} /> 新增
+                    <Plus size={20} /> {t('admin_add')}
                   </button>
                 </div>
               </div>
 
               {/* 右：已輸入的隊員資料 */}
               <div className="w-full md:w-2/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex justify-between items-center mb-4 border-b pb-2">
-                  <h2 className="text-lg font-bold text-gray-700">已輸入的隊員資料</h2>
-                  <span className="text-sm text-gray-400">共 {users.length} 人</span>
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 border-b pb-2 gap-4">
+                  <h2 className="text-lg font-bold text-gray-700 whitespace-nowrap">{t('admin_member_list')}</h2>
+
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* 搜尋欄位 */}
+                    <div className="relative flex-grow md:flex-grow-0 md:w-64">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full pl-10 p-2 outline-none placeholder-gray-400"
+                        placeholder="可輸入隊員姓名、Email 搜尋"
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setMemberPage(1); // Reset to first page on search
+                        }}
+                      />
+                    </div>
+
+                    <span className="text-sm text-gray-400 whitespace-nowrap">{t('admin_member_count').replace('{count}', filteredUsers.length)}</span>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {users.length === 0 ? (
-                    <p className="text-gray-400 text-center py-8">尚無資料</p>
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-gray-400 text-center py-8">{searchTerm ? '查無符合資料' : t('admin_no_members')}</p>
                   ) : (
                     <>
-                      {users.slice((memberPage - 1) * 5, memberPage * 5).map((user) => {
+                      {filteredUsers.slice((memberPage - 1) * 5, memberPage * 5).map((user) => {
                         const isEditing = editingId === user.Name;
                         const isExpanded = expandedId === user.Name;
                         const showDetails = isEditing || isExpanded;
@@ -677,21 +746,21 @@ const AdminPage = () => {
                       {users.length > 5 && (
                         <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
                           <span className="text-sm text-gray-500">
-                            第 {memberPage} / {Math.ceil(users.length / 5)} 頁
+                            {t('admin_page_info').replace('{current}', memberPage).replace('{total}', Math.ceil(filteredUsers.length / 5))}
                           </span>
                           <button
                             onClick={() => setMemberPage(p => Math.max(1, p - 1))}
                             disabled={memberPage === 1}
                             className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
                           >
-                            ← 上一頁
+                            {t('admin_prev')}
                           </button>
                           <button
-                            onClick={() => setMemberPage(p => Math.min(Math.ceil(users.length / 5), p + 1))}
-                            disabled={memberPage >= Math.ceil(users.length / 5)}
+                            onClick={() => setMemberPage(p => Math.min(Math.ceil(filteredUsers.length / 5), p + 1))}
+                            disabled={memberPage >= Math.ceil(filteredUsers.length / 5)}
                             className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
                           >
-                            下一頁 →
+                            {t('admin_next')}
                           </button>
                         </div>
                       )}
@@ -1172,7 +1241,23 @@ const AdminPage = () => {
                           <div className="truncate max-w-[120px] md:max-w-none">{bug.reporter_name}</div>
                           <div className="text-xs text-gray-400 truncate max-w-[120px] md:max-w-none">{bug.reporter_email}</div>
                         </td>
-                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-700 max-w-[200px] truncate">{bug.description}</td>
+                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-700 max-w-[200px]">
+                          {bug.description && bug.description.length > 50 ? (
+                            <div>
+                              <span className={expandedBugId === bug.id ? '' : 'line-clamp-2'}>
+                                {bug.description}
+                              </span>
+                              <button
+                                onClick={() => setExpandedBugId(expandedBugId === bug.id ? null : bug.id)}
+                                className="text-blue-600 hover:underline text-xs ml-1 whitespace-nowrap"
+                              >
+                                {expandedBugId === bug.id ? '收起' : '顯示更多'}
+                              </button>
+                            </div>
+                          ) : (
+                            bug.description
+                          )}
+                        </td>
                         <td className="p-3 md:p-4">
                           {bug.screenshot_url ? (
                             <a

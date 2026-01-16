@@ -72,6 +72,42 @@ export default function FAQPage() {
         setOpenIndex(openIndex === index ? null : index);
     };
 
+    // 動態注入 FAQPage JSON-LD Schema (SEO/AEO)
+    React.useEffect(() => {
+        const faqSchema = {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": content.items.map(item => ({
+                "@type": "Question",
+                "name": item.question,
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": item.answer
+                }
+            }))
+        };
+
+        const script = document.createElement('script');
+        script.type = 'application/ld+json';
+        script.id = 'faq-schema';
+        script.text = JSON.stringify(faqSchema);
+
+        // 移除舊的 schema (如果存在)
+        const existingScript = document.getElementById('faq-schema');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        document.head.appendChild(script);
+
+        return () => {
+            const scriptToRemove = document.getElementById('faq-schema');
+            if (scriptToRemove) {
+                scriptToRemove.remove();
+            }
+        };
+    }, [content]);
+
     return (
         <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden font-sans">
             <Navbar />

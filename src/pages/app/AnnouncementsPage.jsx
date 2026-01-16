@@ -138,6 +138,7 @@ const leaderboardData = [
 ];
 
 export default function AnnouncementsPage() {
+    const { lang } = useLanguage();
     const [viewMode, setViewMode] = useState('month'); // 'month' | 'year'
     const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
     const [events, setEvents] = useState(initialEvents);
@@ -233,7 +234,9 @@ export default function AnnouncementsPage() {
     // 渲染年度總覽
     const renderYearGrid = () => {
         const year = currentDate.getFullYear();
-        const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+        const months = lang === 'zh'
+            ? ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+            : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         return (
             <div className="grid grid-cols-3 md:grid-cols-4 gap-4 p-4">
@@ -277,7 +280,7 @@ export default function AnnouncementsPage() {
                                         <ChevronLeft size={20} />
                                     </button>
                                     <span className="text-xl md:text-2xl font-extrabold text-slate-900 w-36 md:w-44 text-center tracking-tight">
-                                        {currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月
+                                        {lang === 'zh' ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月` : `${currentDate.toLocaleString('default', { month: 'long' })} ${currentDate.getFullYear()}`}
                                     </span>
                                     <button onClick={nextMonth} className="p-2 hover:bg-slate-50 rounded-full text-slate-500 transition-colors">
                                         <ChevronRight size={20} />
@@ -287,7 +290,7 @@ export default function AnnouncementsPage() {
                             {viewMode === 'year' && (
                                 <div className="flex items-center space-x-4">
                                     <span className="text-xl md:text-2xl font-extrabold text-slate-900">
-                                        {currentDate.getFullYear()} 年度總覽
+                                        {lang === 'zh' ? `${currentDate.getFullYear()} 年度總覽` : `${currentDate.getFullYear()} Overview`}
                                     </span>
                                 </div>
                             )}
@@ -308,13 +311,13 @@ export default function AnnouncementsPage() {
                                     onClick={() => setViewMode('month')}
                                     className={`px-4 py-1.5 text-sm rounded-md transition-all font-bold ${viewMode === 'month' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}
                                 >
-                                    月
+                                    {lang === 'zh' ? '月' : 'Month'}
                                 </button>
                                 <button
                                     onClick={() => setViewMode('year')}
                                     className={`px-4 py-1.5 text-sm rounded-md transition-all font-bold ${viewMode === 'year' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'}`}
                                 >
-                                    年
+                                    {lang === 'zh' ? '年' : 'Year'}
                                 </button>
                             </div>
                         </div>
@@ -335,7 +338,7 @@ export default function AnnouncementsPage() {
                     {viewMode === 'month' ? (
                         <>
                             <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                                {['日', '一', '二', '三', '四', '五', '六'].map(day => (
+                                {(lang === 'zh' ? ['日', '一', '二', '三', '四', '五', '六'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map(day => (
                                     <div key={day} className="py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">
                                         {day}
                                     </div>
@@ -357,10 +360,10 @@ export default function AnnouncementsPage() {
                         <div className="p-4 border-b border-slate-100 bg-white flex items-center justify-between">
                             <h3 className="font-bold text-slate-900 flex items-center">
                                 <Trophy size={18} className="text-amber-500 mr-2" />
-                                本月風雲榜
+                                {lang === 'zh' ? '本月風雲榜' : 'Monthly Leaderboard'}
                             </h3>
                             <span className="text-xs text-slate-500 font-bold cursor-pointer hover:text-red-600 transition-colors">
-                                查看全部
+                                {lang === 'zh' ? '查看全部' : 'View All'}
                             </span>
                         </div>
                         <ul className="divide-y divide-slate-50">
@@ -386,7 +389,7 @@ export default function AnnouncementsPage() {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                         <h3 className="font-bold text-slate-900 mb-3 text-sm flex items-center">
                             <Users size={16} className="mr-2 text-slate-500" />
-                            我的近期報名
+                            {lang === 'zh' ? '我的近期報名' : 'My Recent Registrations'}
                         </h3>
                         <div className="space-y-2 mb-4">
                             {userRegisteredEvents.slice(0, 3).map(e => (
@@ -396,14 +399,14 @@ export default function AnnouncementsPage() {
                                 </div>
                             ))}
                             {userRegisteredEvents.length === 0 && (
-                                <span className="text-xs text-slate-400 block text-center py-2">尚無報名</span>
+                                <span className="text-xs text-slate-400 block text-center py-2">{lang === 'zh' ? '尚無報名' : 'No registrations'}</span>
                             )}
                         </div>
                         <a
                             href="/app/journey"
                             className="w-full py-2.5 text-xs font-bold text-center text-red-600 border border-red-100 rounded-lg hover:bg-red-50 transition-colors block"
                         >
-                            前往「我的龍舟旅程」
+                            {lang === 'zh' ? '前往「我的龍舟旅程」' : 'Go to My Journey'}
                         </a>
                     </div>
                 </div>
@@ -428,7 +431,7 @@ export default function AnnouncementsPage() {
                                 {eventTypes[selectedEvent.type].points > 0 && (
                                     <span className="text-xs font-bold px-2.5 py-1 bg-yellow-400 text-yellow-900 rounded-md flex items-center shadow-sm">
                                         <Trophy size={12} className="mr-1" />
-                                        +{eventTypes[selectedEvent.type].points} M 點
+                                        +{eventTypes[selectedEvent.type].points} {lang === 'zh' ? 'M 點' : 'M Pts'}
                                     </span>
                                 )}
                             </div>
@@ -443,7 +446,7 @@ export default function AnnouncementsPage() {
                                     <Clock size={20} />
                                 </div>
                                 <div>
-                                    <p className="font-bold text-slate-900 text-sm mb-0.5">時間</p>
+                                    <p className="font-bold text-slate-900 text-sm mb-0.5">{lang === 'zh' ? '時間' : 'Time'}</p>
                                     <p className="text-sm font-medium">{selectedEvent.date}</p>
                                     <p className="text-sm font-medium">{selectedEvent.time}</p>
                                 </div>
@@ -453,7 +456,7 @@ export default function AnnouncementsPage() {
                                     <MapPin size={20} />
                                 </div>
                                 <div>
-                                    <p className="font-bold text-slate-900 text-sm mb-0.5">地點</p>
+                                    <p className="font-bold text-slate-900 text-sm mb-0.5">{lang === 'zh' ? '地點' : 'Location'}</p>
                                     <p className="text-sm font-medium">{selectedEvent.location}</p>
                                 </div>
                             </div>
@@ -472,7 +475,7 @@ export default function AnnouncementsPage() {
                                 onClick={() => setSelectedEvent(null)}
                                 className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-200 rounded-lg transition-colors text-sm"
                             >
-                                關閉
+                                {lang === 'zh' ? '關閉' : 'Close'}
                             </button>
 
                             {selectedEvent.type !== 'recruiting' && (
@@ -487,9 +490,9 @@ export default function AnnouncementsPage() {
                                     `}
                                 >
                                     {selectedEvent.registered ? (
-                                        <><X size={16} className="mr-2" /> 取消報名</>
+                                        <><X size={16} className="mr-2" /> {lang === 'zh' ? '取消報名' : 'Cancel Registration'}</>
                                     ) : (
-                                        <><CheckCircle size={16} className="mr-2" /> 立即報名</>
+                                        <><CheckCircle size={16} className="mr-2" /> {lang === 'zh' ? '立即報名' : 'Register Now'}</>
                                     )}
                                 </button>
                             )}
@@ -507,12 +510,20 @@ export default function AnnouncementsPage() {
                                 {confirmModal.type === 'cancel' ? <X size={28} /> : <CheckCircle size={28} />}
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-2">
-                                {confirmModal.type === 'cancel' ? '確定要取消報名嗎？' : '確認報名此活動？'}
+                                {confirmModal.type === 'cancel'
+                                    ? (lang === 'zh' ? '確定要取消報名嗎？' : 'Cancel Registration?')
+                                    : (lang === 'zh' ? '確認報名此活動？' : 'Confirm Registration?')
+                                }
                             </h3>
                             <p className="text-sm text-slate-500 font-medium px-4">
                                 {confirmModal.type === 'cancel'
-                                    ? `您正在取消「${confirmModal.event?.title}」。取消後可能無法獲得 M 點獎勵。`
-                                    : `您即將報名「${confirmModal.event?.title}」。`}
+                                    ? (lang === 'zh'
+                                        ? `您正在取消「${confirmModal.event?.title}」。取消後可能無法獲得 M 點獎勵。`
+                                        : `You are cancelling "${confirmModal.event?.title}". You may lose M Points.`)
+                                    : (lang === 'zh'
+                                        ? `您即將報名「${confirmModal.event?.title}」。`
+                                        : `You are registering for "${confirmModal.event?.title}".`)
+                                }
                             </p>
                         </div>
                         <div className="bg-slate-50 px-4 py-4 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-100">
@@ -521,14 +532,17 @@ export default function AnnouncementsPage() {
                                 onClick={executeAction}
                                 className={`w-full inline-flex justify-center rounded-lg shadow-sm px-4 py-2.5 text-sm font-bold text-white sm:ml-3 sm:w-auto transition-all ${confirmModal.type === 'cancel' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'}`}
                             >
-                                {confirmModal.type === 'cancel' ? '確認取消' : '確認報名'}
+                                {confirmModal.type === 'cancel'
+                                    ? (lang === 'zh' ? '確認取消' : 'Confirm')
+                                    : (lang === 'zh' ? '確認報名' : 'Confirm')
+                                }
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
                                 className="mt-3 w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2.5 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 sm:mt-0 sm:ml-3 sm:w-auto"
                             >
-                                再想想
+                                {lang === 'zh' ? '再想想' : 'Cancel'}
                             </button>
                         </div>
                     </div>

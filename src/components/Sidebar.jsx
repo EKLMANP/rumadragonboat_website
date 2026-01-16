@@ -17,7 +17,8 @@ import {
     Settings,
     LogOut,
     X,
-    MessageSquareWarning
+    MessageSquareWarning,
+    Globe
 } from 'lucide-react';
 import BugReportModal from './BugReportModal';
 
@@ -25,7 +26,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     const location = useLocation();
     const navigate = useNavigate();
     const { userProfile, userRoles, logout } = useAuth();
-    const { lang } = useLanguage();
+    const { lang, toggleLanguage } = useLanguage();
     const [showBugModal, setShowBugModal] = useState(false);
 
     // 直接從 userRoles 陣列計算權限，避免派生狀態延遲
@@ -138,20 +139,14 @@ export default function Sidebar({ isOpen, onToggle }) {
                     h-[100dvh] max-h-[100dvh] overflow-hidden
                 `}
             >
-                {/* Logo 區 - 使用 logo_website.png + RUMA 文字 */}
+                {/* Logo 區 */}
                 <div className="flex-shrink-0 p-6 border-b border-slate-700/50 flex items-center justify-between">
-                    <Link to="/" className="flex items-center space-x-3 group">
+                    <Link to="/" className="flex items-center group">
                         <img
-                            src="/logo_website.png"
+                            src="/Header_Footer_v2.png"
                             alt="RUMA"
-                            className="h-10 w-auto group-hover:scale-105 transition-transform"
+                            className="h-5 w-auto group-hover:scale-105 transition-transform"
                         />
-                        <span
-                            className="text-white font-extrabold italic text-2xl tracking-wide"
-                            style={{ fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif" }}
-                        >
-                            RUMA<span className="text-red-500">.</span>
-                        </span>
                     </Link>
 
                     {/* Mobile Close Button */}
@@ -205,13 +200,21 @@ export default function Sidebar({ isOpen, onToggle }) {
                 </nav>
 
                 {/* Bug Report Button */}
-                <div className="px-4 pb-2">
+                <div className="px-4 pb-2 flex gap-2">
+                    <button
+                        onClick={toggleLanguage}
+                        className="flex items-center justify-center px-3 py-3 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all"
+                        title={lang === 'zh' ? 'Switch to English' : '切換至中文'}
+                    >
+                        <Globe size={18} className="mr-1" />
+                        <span className="text-xs font-bold">{lang === 'zh' ? 'EN' : '中'}</span>
+                    </button>
                     <button
                         onClick={() => setShowBugModal(true)}
-                        className="w-full flex items-center px-4 py-3 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-all font-bold group"
+                        className="flex-1 flex items-center px-4 py-3 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-all font-bold group"
                     >
                         <MessageSquareWarning size={18} className="mr-3" />
-                        <span>Bug 回報</span>
+                        <span>{lang === 'zh' ? 'Bug 回報' : 'Report Bug'}</span>
                     </button>
                 </div>
 
@@ -243,14 +246,14 @@ export default function Sidebar({ isOpen, onToggle }) {
                             <Link
                                 to="/app/profile"
                                 className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors"
-                                title="個人設定"
+                                title={lang === 'zh' ? '個人設定' : 'Profile Settings'}
                             >
                                 <Settings size={16} />
                             </Link>
                             <button
                                 onClick={handleLogout}
                                 className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors"
-                                title="登出"
+                                title={lang === 'zh' ? '登出' : 'Logout'}
                             >
                                 <LogOut size={16} />
                             </button>

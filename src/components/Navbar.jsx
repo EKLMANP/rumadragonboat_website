@@ -174,15 +174,12 @@ export default function Navbar() {
             <div className="max-w-7xl mx-auto px-4">
                 <div className="flex items-center justify-between h-16 md:h-20">
                     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2 shrink-0 group">
+                    <Link to="/" className="flex items-center shrink-0 group">
                         <img
-                            src={isAppPage ? "/RUMA_logo_APP.png" : "/logo_website.png"}
+                            src="/Header_Footer_v2.png"
                             alt="RUMA Logo"
-                            className="h-8 md:h-10 w-auto group-hover:scale-110 transition"
+                            className="h-5 md:h-6 w-auto group-hover:scale-105 transition"
                         />
-                        <span className={`font-black text-xl md:text-2xl tracking-tight ${textColor}`}>
-                            <span className="text-red-500">RUMA</span>
-                        </span>
                     </Link>
 
                     {/* Desktop Navigation */}
