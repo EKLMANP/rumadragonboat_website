@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/AppLayout';
 import { Megaphone, Crown, Search, Pin, ChevronRight, Loader2, Trophy, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { fetchAnnouncements, fetchAttendance, fetchAllData, fetchMemberBasicInfo } from '../../api/supabaseApi';
+import { fetchAnnouncements, fetchAttendance, fetchAllData, fetchMemberBasicInfo, fetchMPointLeaderboard } from '../../api/supabaseApi';
 import { supabase } from '../../lib/supabase';
 
 export default function AnnouncementsNewsPage() {
@@ -26,21 +26,18 @@ export default function AnnouncementsNewsPage() {
     const loadPageData = async () => {
         setLoading(true);
         try {
-            const [newsData, attData] = await Promise.all([
+            const [newsData, attData, mPointLeaderboard] = await Promise.all([
                 fetchAnnouncements(),
-                fetchAttendance()
+                fetchAttendance(),
+                fetchMPointLeaderboard()
             ]);
 
             setAnnouncements(newsData || []);
 
-
-
-            // ... (inside loadPageData)
-
             // Fetch members with avatar_url safely
             const members = await fetchMemberBasicInfo();
 
-            processLeaderboard(attData, members || []);
+            processLeaderboard(attData, members || [], mPointLeaderboard || []);
 
         } catch (error) {
             console.error("Load Error", error);
@@ -49,13 +46,13 @@ export default function AnnouncementsNewsPage() {
         }
     };
 
-    const processLeaderboard = (attendanceData, membersList) => {
+    const processLeaderboard = (attendanceData, membersList, mPointData) => {
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
         const currentYear = now.getFullYear();
 
+        // Count monthly attendance
         const monthlyStats = {};
-
         attendanceData.forEach(record => {
             const dateStr = record.Date.split('(')[0].replace(/\//g, '-');
             const d = new Date(dateStr);
@@ -65,15 +62,28 @@ export default function AnnouncementsNewsPage() {
             }
         });
 
+        // Create M-point lookup from real data
+        const mPointLookup = {};
+        mPointData.forEach(m => {
+            mPointLookup[m.name] = m.points || 0;
+        });
+
         // Create member lookup for avatar
         const memberLookup = {};
         membersList.forEach(m => {
             memberLookup[m.name] = m.avatar_url || null;
         });
 
-        const sorted = Object.entries(monthlyStats)
-            .map(([name, count]) => {
-                const points = count * 100;
+        // Merge: use real M-points, fall back to attendance-based if no M-point data
+        const allNames = new Set([
+            ...Object.keys(monthlyStats),
+            ...Object.keys(mPointLookup)
+        ]);
+
+        const sorted = Array.from(allNames)
+            .map(name => {
+                const count = monthlyStats[name] || 0;
+                const points = mPointLookup[name] || count; // Use real M-points, fallback to attendance count
                 return {
                     name,
                     count,
@@ -82,11 +92,12 @@ export default function AnnouncementsNewsPage() {
                     avatar: memberLookup[name] || null
                 };
             })
-            .sort((a, b) => b.count - a.count);
+            .filter(item => item.points > 0 || item.count > 0)
+            .sort((a, b) => b.points - a.points || b.count - a.count);
 
         let currentRank = 1;
         for (let i = 0; i < sorted.length; i++) {
-            if (i > 0 && sorted[i].count < sorted[i - 1].count) {
+            if (i > 0 && sorted[i].points < sorted[i - 1].points) {
                 currentRank = i + 1;
             }
             sorted[i].rank = currentRank;
@@ -96,6 +107,19 @@ export default function AnnouncementsNewsPage() {
     };
 
     const categories = ['all', '活動', '比賽', '裝勤', '榮譽', '其他'];
+
+    const getTranslatedCategory = (cat) => {
+        if (lang === 'zh') return cat;
+        if (cat === 'all') return 'All';
+        const map = {
+            '活動': 'Activity',
+            '比賽': 'Race',
+            '裝勤': 'Equipment',
+            '榮譽': 'Honor',
+            '其他': 'Other'
+        };
+        return map[cat] || cat;
+    };
 
     const getCategoryColor = (category) => {
         const colors = {
@@ -157,7 +181,7 @@ export default function AnnouncementsNewsPage() {
                 <div className="grid lg:grid-cols-5 gap-6">
                     {/* 本月風雲榜 - 佔據 3/5 寬度 */}
                     <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg p-8 bg-gradient-to-b from-white via-amber-50/30 to-white">
-                        <h2 className="text-xl font-bold text-gray-800 mb-8 flex items-center gap-3 justify-center">
+                        <h2 className="text-xl font-bold text-gray-800 mb-14 flex items-center gap-3 justify-center">
                             <Trophy className="text-yellow-500" size={28} />
                             {lang === 'zh' ? '本月風雲榜' : 'Monthly Leaderboard'}
                             <span className="text-sm font-normal text-gray-400 ml-2">
@@ -195,7 +219,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-sm font-bold text-gray-700 block">{leaderboard[1].name}</span>
-                                                <span className="text-xs text-gray-500">{leaderboard[1].points} M點</span>
+                                                <span className="text-xs text-gray-500">{leaderboard[1].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -218,7 +242,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-base font-bold text-gray-800 block">{leaderboard[0].name}</span>
-                                                <span className="text-sm font-semibold text-yellow-600">{leaderboard[0].points} M點</span>
+                                                <span className="text-sm font-semibold text-yellow-600">{leaderboard[0].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -240,7 +264,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-sm font-bold text-gray-700 block">{leaderboard[2].name}</span>
-                                                <span className="text-xs text-gray-500">{leaderboard[2].points} M點</span>
+                                                <span className="text-xs text-gray-500">{leaderboard[2].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -255,9 +279,9 @@ export default function AnnouncementsNewsPage() {
                                                 <Avatar name={item.name} avatar={item.avatar} size="sm" className="shadow" />
                                                 <div className="flex-1">
                                                     <div className="font-medium text-gray-700">{item.name}</div>
-                                                    <div className="text-xs text-gray-500">{item.count}次出席</div>
+                                                    <div className="text-xs text-gray-500">{item.count} {lang === 'zh' ? '次出席' : (item.count === 1 ? 'Attendance' : 'Attendances')}</div>
                                                 </div>
-                                                <div className="text-sm font-bold text-red-500">{item.points} M</div>
+                                                <div className="text-sm font-bold text-red-500">{item.points} {lang === 'zh' ? 'M點' : 'M Pts'}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -277,7 +301,7 @@ export default function AnnouncementsNewsPage() {
                             >
                                 <option value="all">{lang === 'zh' ? '所有類別' : 'All Categories'}</option>
                                 {categories.slice(1).map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
+                                    <option key={cat} value={cat}>{getTranslatedCategory(cat)}</option>
                                 ))}
                             </select>
                         </div>
@@ -314,11 +338,11 @@ export default function AnnouncementsNewsPage() {
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                     {news.pinned && (
                                                         <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded font-medium flex items-center gap-1">
-                                                            <Pin size={10} /> 置頂
+                                                            <Pin size={10} /> {lang === 'zh' ? '置頂' : 'Pinned'}
                                                         </span>
                                                     )}
                                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(news.category)}`}>
-                                                        {news.category || '一般'}
+                                                        {getTranslatedCategory(news.category || '一般')}
                                                     </span>
                                                 </div>
                                                 <h3 className="font-bold text-gray-800 group-hover:text-sky-600 transition truncate">
@@ -349,7 +373,7 @@ export default function AnnouncementsNewsPage() {
                                         <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded font-medium">{lang === 'zh' ? '置頂' : 'Pinned'}</span>
                                     )}
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(selectedAnnouncement.category)}`}>
-                                        {selectedAnnouncement.category || '一般'}
+                                        {getTranslatedCategory(selectedAnnouncement.category || '一般')}
                                     </span>
                                 </div>
                                 <h2 className="text-lg sm:text-xl font-bold text-gray-800 break-words">{selectedAnnouncement.title}</h2>

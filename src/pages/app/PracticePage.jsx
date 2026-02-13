@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter } from 'lucide-react';
+import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter, ChevronDown } from 'lucide-react';
 import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations, fetchSeatingArrangements } from '../../api/supabaseApi';
 import { generateSeating } from '../../utils/seatingLogic';
 import SeatVisualizer from '../../components/SeatVisualizer';
@@ -41,9 +41,87 @@ export default function PracticePage() {
 
     // Legacy data for seating chart
     const [practiceSessions, setPracticeSessions] = useState([]);
-    const [allRegs, setAllRegs] = useState([]);
+    const [allRegs, setAllRegs] = useState([]); // Raw registration data for auto-generation
     const [openDates, setOpenDates] = useState([]);
-    const [seatingCharts, setSeatingCharts] = useState({}); // 🔥 Synced Seating Data
+
+    // Seating Chart State
+    const [seatingDate, setSeatingDate] = useState('');
+    const [seatingData, setSeatingData] = useState(null);
+    const [seatingLoading, setSeatingLoading] = useState(false);
+    const [availableSeatingDates, setAvailableSeatingDates] = useState([]);
+
+    // Load seating data when date changes
+    useEffect(() => {
+        if (seatingDate) {
+            loadSeatingForDate(seatingDate);
+        }
+    }, [seatingDate]);
+
+    const loadSeatingForDate = async (date) => {
+        setSeatingLoading(true);
+        try {
+            // 1. Try to fetch saved arrangement
+            const { data: savedData, error } = await supabase
+                .from('seating_arrangements')
+                .select('boat_data')
+                .eq('practice_date', date.split('(')[0].replace(/\//g, '-').trim()) // Standardize date
+                .maybeSingle();
+
+            if (savedData?.boat_data) {
+                console.log('Using saved seating chart');
+                setSeatingData(savedData.boat_data);
+            } else {
+                // 2. Fallback: Generate from registrations
+                console.log('Generating preview seating chart');
+
+                // Find registrations for this date
+                // Need to match date format. The `registrations` state has `practicedates` which might need normalization
+                // `registrations` state comes from `fetchActivityRegistrations` which has:
+                // { name: ..., practice_date: ..., activity: { date: ... } }
+
+                // We need the raw registrations with user info to generate seating
+                // `allRegs` (from loadData) has { name, practicedates }
+                // But `generateSeating` needs full user objects (weight, skill, side)
+
+                // Filter registrations for this date
+                const targetDateRegs = registrations.filter(r => {
+                    // Check against activity date
+                    if (r.activities?.date) {
+                        const actDate = r.activities.date.replace(/-/g, '/'); // 2026/02/15
+                        const target = date.split('(')[0].replace(/-/g, '/'); // 2026/02/15
+                        return actDate === target;
+                    }
+                    return false;
+                });
+
+                // Map to full user objects from `users` state
+                const participants = targetDateRegs.map(r => {
+                    // Try to match by user_id first, then by name
+                    const user = users.find(u =>
+                        (r.user_id && u.id === r.user_id) ||
+                        (u.Name === (r.users?.name || r.name))
+                    );
+
+                    if (user) return user;
+
+                    // Fallback for unknown users
+                    return {
+                        Name: r.users?.name || r.name || 'Unknown',
+                        Weight: 0,
+                        Position: '左右',
+                        Skill_Rating: 1
+                    };
+                });
+
+                const generated = generateSeating(participants);
+                setSeatingData(generated);
+            }
+        } catch (error) {
+            console.error("Error loading seating:", error);
+        } finally {
+            setSeatingLoading(false);
+        }
+    };
 
     // 從 Calendar 頁面導航過來時的預選活動
     useEffect(() => {
@@ -76,18 +154,10 @@ export default function PracticePage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            // 超時保護
-            const withQuickTimeout = (promise, ms = 3000, fallback = []) => {
-                return Promise.race([
-                    promise,
-                    new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
-                ]);
-            };
-
-            // 只載入核心活動資料 (帶快速超時)
+            // 只載入核心活動資料
             const [acts, regs] = await Promise.all([
-                withQuickTimeout(fetchActivities(), 3000, []),
-                withQuickTimeout(fetchActivityRegistrations(), 3000, [])
+                fetchActivities(),
+                fetchActivityRegistrations()
             ]);
 
             setActivities(acts || []);
@@ -99,8 +169,8 @@ export default function PracticePage() {
                 try {
                     const { data: members } = await supabase
                         .from('members')
-                        .select('name, email, weight, position, skill_rating')
-                        .limit(50);
+                        .select('name, email, weight, position, skill_rating, user_id')
+                        .order('name'); // Remove limit to ensure all members are loaded
 
                     const { data: dates } = await supabase
                         .from('practice_dates')
@@ -114,6 +184,7 @@ export default function PracticePage() {
 
                     if (members) {
                         setUsers(members.map(m => ({
+                            id: m.user_id, // Add user_id for better matching
                             Name: m.name,
                             Email: m.email,
                             Weight: m.weight,
@@ -150,12 +221,17 @@ export default function PracticePage() {
 
                     // New activities system dates (boat_practice)
                     const boatActivities = (acts || []).filter(a => a.type === 'boat_practice');
-                    boatActivities.forEach(a => {
-                        const formattedDate = `${a.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(a.date).getDay()]})`;
-                        if (!allSeatingDates.includes(formattedDate)) {
-                            allSeatingDates.push(formattedDate);
-                        }
-                    });
+                    const newSeatingDates = boatActivities
+                        .map(a => `${a.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(a.date).getDay()]})`)
+                        .sort(); // Sort dates
+
+                    setAvailableSeatingDates(newSeatingDates);
+
+                    // Set default date if available
+                    if (newSeatingDates.length > 0 && !seatingDate) {
+                        // Find closest upcoming date or just the first one
+                        setSeatingDate(newSeatingDates[0]);
+                    }
 
                     if (allSeatingDates.length > 0) {
                         const seatingData = await fetchSeatingArrangements(allSeatingDates);
@@ -390,7 +466,7 @@ export default function PracticePage() {
                             <p className="text-gray-500 mt-1">
                                 {lang === 'zh' ? '報名活動以及查看槳位安排' : 'Register for activities and view seating'}
                                 <span className="text-sm text-gray-400 ml-2">
-                                    ({lang === 'zh' ? '船練、Team Building、龍船比賽以及內部競賽' : 'Practice, Team Building, Races, Internal'})
+                                    ({lang === 'zh' ? '船練、Team Building、龍舟比賽以及內部競賽' : 'Practice, Team Building, Races, Internal'})
                                 </span>
                             </p>
                         </div>
@@ -600,16 +676,46 @@ export default function PracticePage() {
 
                 {/* 船練座位表 */}
                 <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        📊 {lang === 'zh' ? '船練座位表' : 'Seating Chart'}
-                    </h2>
-                    <p className="text-gray-500 text-sm mb-6">
-                        {lang === 'zh' ? '* 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。' : '* This is an auto-generated seating based on current registrations. Actual seats may be adjusted by coaches.'}
-                    </p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                📊 {lang === 'zh' ? '船練座位表' : 'Seating Chart'}
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">
+                                {lang === 'zh' ? '* 這是系統根據目前報名狀況自動預排或教練已確認的結果。' : '* This is an auto-generated preview or a confirmed arrangement by coaches.'}
+                            </p>
+                        </div>
 
-                    <div className="space-y-8">
-                        {renderSeatingCharts()}
+                        {/* 日期選擇器 */}
+                        <div className="relative">
+                            <select
+                                value={seatingDate}
+                                onChange={(e) => setSeatingDate(e.target.value)}
+                                className="appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full p-2.5 pr-8"
+                            >
+                                {availableSeatingDates.length === 0 && <option value="">{lang === 'zh' ? '暫無船練' : 'No Practice'}</option>}
+                                {availableSeatingDates.map(date => (
+                                    <option key={date} value={date}>{date}</option>
+                                ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                <ChevronDown size={16} />
+                            </div>
+                        </div>
                     </div>
+
+                    {seatingLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mb-4"></div>
+                            <p className="text-gray-500">{lang === 'zh' ? '載入座位表中...' : 'Loading chart...'}</p>
+                        </div>
+                    ) : (
+                        <SeatVisualizer
+                            boatData={seatingData}
+                            date={seatingDate}
+                            isEditable={false}
+                        />
+                    )}
                 </div>
             </div>
 

@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/AppLayout';
 import { MapPin, Calendar, Camera, Star, Clock, CheckCircle, XCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchActivityRegistrations, postData, fetchTrainingRecords } from '../../api/supabaseApi';
+import { fetchActivityRegistrations, postData, fetchTrainingRecords, fetchUserPoints, fetchPointEvents, fetchRewards, redeemReward } from '../../api/supabaseApi';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../contexts/AuthContext';
 import { compressImage } from '../../utils/imageUtils';
@@ -14,7 +14,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 export default function MyJourneyPage() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { userProfile } = useAuth();
+    const { userProfile, user } = useAuth();
     const { t, lang } = useLanguage();
 
     // 根據 URL 決定當前 Tab
@@ -32,14 +32,10 @@ export default function MyJourneyPage() {
     const [trainingRecords, setTrainingRecords] = useState([]);
     const [pointsData, setPointsData] = useState({
         mPoints: 0,
-        uCoins: 0,
         history: [],
-        products: [
-            { id: 1, name: '槳造型鑰匙圈', price: 5, image: null },
-            { id: 2, name: 'RUMA限量帽T', price: 50, image: null },
-            { id: 3, name: 'RUMA限量棒球帽', price: 25, image: null },
-        ]
+        products: []
     });
+    const [redeemingId, setRedeemingId] = useState(null);
 
     const fileInputRef = useRef(null);
     const [uploadForm, setUploadForm] = useState({
@@ -62,6 +58,66 @@ export default function MyJourneyPage() {
     // 歷史紀錄：篩選與分頁
     const [historyFilter, setHistoryFilter] = useState('all');
     const [historyPage, setHistoryPage] = useState(1);
+
+    // M-Point History Pagination
+    const [pointHistoryPage, setPointHistoryPage] = useState(1);
+    const POINT_HISTORY_ITEMS_PER_PAGE = 5;
+
+    // M-Point Product Pagination
+    const [productPage, setProductPage] = useState(1);
+    const [itemsPerProductPage, setItemsPerProductPage] = useState(window.innerWidth < 768 ? 3 : 6);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setItemsPerProductPage(window.innerWidth < 768 ? 3 : 6);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Translation Helpers
+    const getTranslatedProductName = (name) => {
+        if (lang === 'zh') return name;
+        if (name.includes('鑰匙圈')) return 'Keychain';
+        if (name.includes('毛巾')) return 'Towel';
+        if (name.includes('棒球帽')) return 'Baseball Cap';
+        if (name.includes('帽T')) return 'Hoodie';
+        if (name.includes('限量帽T')) return 'Limited Hoodie';
+        if (name.includes('T-shirt') || name.includes('排汗衫') || name.includes('T恤')) return 'T-Shirt';
+        return name;
+    };
+
+    const getTranslatedProductDesc = (desc) => {
+        if (lang === 'zh' || !desc) return desc;
+        if (desc.includes('專屬')) return 'Exclusive RUMA Design';
+        return desc;
+    };
+
+    const getTranslatedHistoryItem = (activity) => {
+        if (lang === 'zh') return activity;
+        let translated = activity;
+        translated = translated.replace('兌換:', 'Redeemed:');
+        translated = translated.replace('限量龍舟鑰匙圈', 'Limited Dragon Boat Keychain');
+        translated = translated.replace('RUMA 限量毛巾', 'RUMA Limited Towel');
+        translated = translated.replace('RUMA 限量棒球帽', 'RUMA Limited Baseball Cap');
+        translated = translated.replace('RUMA 限量帽T', 'RUMA Limited Hoodie');
+        translated = translated.replace('出席練習', 'Attended Practice');
+        translated = translated.replace('體能課', 'Fitness Class');
+        translated = translated.replace('自主訓練', 'Self-Training');
+        return translated;
+    };
+
+    const getTranslatedTrainingType = (type) => {
+        if (lang === 'zh') return type;
+        const map = {
+            '划船訓練': 'Rowing Training',
+            '重量訓練': 'Weight Training',
+            '核心訓練': 'Core Training',
+            '高強度間歇訓練': 'HIIT',
+            '其他': 'Other'
+        };
+        return map[type] || type;
+    };
 
     // 活動類別選項 - with bilingual support
     const categoryOptions = [
@@ -89,23 +145,55 @@ export default function MyJourneyPage() {
     const upcomingTotalPages = Math.ceil(filteredUpcoming.length / ITEMS_PER_PAGE);
     const paginatedUpcoming = filteredUpcoming.slice((upcomingPage - 1) * ITEMS_PER_PAGE, upcomingPage * ITEMS_PER_PAGE);
 
-    // 篩選後的歷史紀錄
+    // 篩選後的歷史活動
     const filteredHistory = historyFilter === 'all'
         ? events.past
         : events.past.filter(e => e.type === historyFilter);
     const historyTotalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
     const paginatedHistory = filteredHistory.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
 
-    // 載入資料
+    // M-Point History Pagination Logic
+    const pointHistoryTotalPages = Math.ceil(pointsData.history.length / POINT_HISTORY_ITEMS_PER_PAGE);
+    const paginatedPointHistory = pointsData.history.slice((pointHistoryPage - 1) * POINT_HISTORY_ITEMS_PER_PAGE, pointHistoryPage * POINT_HISTORY_ITEMS_PER_PAGE);
+
+    // M-Point Product Pagination Logic
+    const productTotalPages = Math.ceil(pointsData.products.length / itemsPerProductPage);
+    const paginatedProducts = pointsData.products.slice((productPage - 1) * itemsPerProductPage, productPage * itemsPerProductPage);
+
+
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // 載入活動報名資料與訓練紀錄
-                const [regs, training] = await Promise.all([
-                    fetchActivityRegistrations(),
-                    fetchTrainingRecords() // Assume implemented
+                // 載入活動報名資料、訓練紀錄、M點資料
+                const [regs, training, userPoints, pointHistory, rewards] = await Promise.all([
+                    fetchActivityRegistrations(true),
+                    fetchTrainingRecords(),
+                    fetchUserPoints(),
+                    fetchPointEvents(),
+                    fetchRewards()
                 ]);
+
+                // 設定 M 點資料
+                setPointsData({
+                    mPoints: userPoints?.totalPoints || 0,
+                    history: (pointHistory || []).map(ev => ({
+                        id: ev.id,
+                        activity: ev.description || ev.point_rules?.rule_name || '積點變動',
+                        date: new Date(ev.created_at).toLocaleDateString('zh-TW'),
+                        points: ev.points_change,
+                        type: ev.event_type
+                    })),
+                    products: (rewards || [])
+                        .map(r => ({
+                            id: r.id,
+                            name: r.reward_name || r.name, // Handle both potential field names
+                            price: r.points_cost || r.u_coins_price, // Handle both potential field names
+                            image: r.image_url,
+                            description: r.description,
+                            stock: r.stock || 0 // Map stock
+                        }))
+                });
 
                 setTrainingRecords(training);
 
@@ -115,11 +203,17 @@ export default function MyJourneyPage() {
                 const upcoming = [];
                 const past = [];
 
+                // API 層已過濾為當前使用者的報名紀錄
                 (regs || []).forEach((reg, idx) => {
                     const activity = reg.activities;
                     if (!activity) return;
 
-                    const eventDate = new Date(activity.date);
+                    // Parse date ensuring local time 00:00 comparison
+                    const activityDateStr = activity.date.split('(')[0].replace(/\//g, '-'); // YYYY-MM-DD
+                    const eventDate = new Date(activityDateStr);
+                    // Set eventDate to end of day to include current day activities
+                    eventDate.setHours(23, 59, 59, 999);
+
                     const event = {
                         id: reg.id || idx,
                         title: activity.name,
@@ -131,7 +225,10 @@ export default function MyJourneyPage() {
                                 activity.type === 'team_building' ? (lang === 'zh' ? '團建' : 'Team Building') : (lang === 'zh' ? '內部' : 'Internal')
                     };
 
-                    if (eventDate >= now) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (eventDate >= today) {
                         upcoming.push(event);
                     } else {
                         past.push({ ...event, attended: true, points: 2 });
@@ -147,8 +244,7 @@ export default function MyJourneyPage() {
         };
 
         loadData();
-        loadData();
-    }, [userProfile, refreshKey]);
+    }, [user?.id, refreshKey]);
 
     const handleCancelRegistration = async (regId, title) => {
         const result = await Swal.fire({
@@ -251,7 +347,7 @@ export default function MyJourneyPage() {
     const tabs = [
         { id: 'events', label: lang === 'zh' ? '已報名的活動' : 'Registered Activities', icon: Calendar },
         { id: 'upload', label: lang === 'zh' ? '自主訓練紀錄上傳' : 'Upload Training', icon: Camera },
-        { id: 'points', label: lang === 'zh' ? '我的M點U幣' : 'My M Points', icon: Star },
+        { id: 'points', label: lang === 'zh' ? '我的M點' : 'My M Points', icon: Star },
     ];
 
     const getStatusBadge = (status) => {
@@ -297,7 +393,7 @@ export default function MyJourneyPage() {
                             <MapPin className="text-red-600" />
                             {t('journey_title')}
                         </h1>
-                        <p className="text-gray-500 mt-1">{lang === 'zh' ? '管理你的活動報名與參與紀錄' : 'Manage your activities and records'}</p>
+                        <p className="text-gray-500 mt-1">{lang === 'zh' ? '管理我的活動報名、自主訓練紀錄以及 M 點' : 'Manage your activities, training records, and M-Points'}</p>
                     </div>
                     <div className="bg-sky-50 px-4 py-2 rounded-xl">
                         <span className="text-gray-600">{lang === 'zh' ? '已累積 M 點: ' : 'M Points: '}</span>
@@ -577,7 +673,7 @@ export default function MyJourneyPage() {
                                                             )}
                                                         </div>
                                                         <div>
-                                                            <div className="font-medium text-gray-800">{record.type} {record.custom_type ? `(${record.custom_type})` : ''}</div>
+                                                            <div className="font-medium text-gray-800">{getTranslatedTrainingType(record.type)} {record.custom_type ? `(${record.custom_type})` : ''}</div>
                                                             <div className="text-sm text-gray-500">{record.date}</div>
                                                         </div>
                                                     </div>
@@ -619,76 +715,204 @@ export default function MyJourneyPage() {
                         </div>
                     )}
 
-                    {/* 我的M點及U幣 Tab */}
+                    {/* 我的M點 Tab */}
                     {activeTab === 'points' && (
                         <div>
-                            {/* 餘額卡片 */}
-                            <div className="grid sm:grid-cols-2 gap-4 mb-6">
-                                <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-6 text-white">
-                                    <div className="text-sm opacity-80">{lang === 'zh' ? 'M點餘額' : 'M Points Balance'}</div>
-                                    <div className="text-4xl font-bold mt-1">{pointsData.mPoints}</div>
-                                    <div className="text-xs opacity-70 mt-2">{lang === 'zh' ? '透過參加活動獲得' : 'Earned by attending activities'}</div>
-                                </div>
-                                <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl p-6 text-white">
-                                    <div className="text-sm opacity-80">{lang === 'zh' ? 'U幣餘額' : 'U Coins Balance'}</div>
-                                    <div className="text-4xl font-bold mt-1">{pointsData.uCoins}</div>
-                                    <div className="text-xs opacity-70 mt-2">{lang === 'zh' ? '可兑換商品' : 'Redeemable for items'}</div>
-                                </div>
-                            </div>
-
-                            {/* M點兌換U幣 */}
-                            <div className="bg-gray-50 rounded-xl p-6 mb-6">
-                                <h3 className="font-bold text-gray-800 mb-4">{lang === 'zh' ? 'M點兌換U幣' : 'M Points to U Coins Exchange'}</h3>
-                                <div className="flex flex-col sm:flex-row items-center gap-4">
-                                    <input
-                                        type="number"
-                                        placeholder={lang === 'zh' ? '輸入M點數量' : 'Enter M Points amount'}
-                                        className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500"
-                                    />
-                                    <div className="text-gray-500 whitespace-nowrap">{lang === 'zh' ? '當前匯率：20 M點 = 1 U幣' : 'Exchange Rate: 20 M Pts = 1 U Coin'}</div>
-                                    <button className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition whitespace-nowrap">
-                                        {lang === 'zh' ? '兌換' : 'Exchange'}
-                                    </button>
+                            {/* M點餘額卡片 */}
+                            <div className="bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 rounded-xl p-6 text-white mb-6 shadow-lg">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm opacity-80 font-medium">{lang === 'zh' ? '累積 M 點' : 'Total M Points'}</div>
+                                        <div className="text-5xl font-bold mt-1">{pointsData.mPoints}</div>
+                                        <div className="text-xs opacity-70 mt-2">{lang === 'zh' ? '透過參加訓練、體能課、自主訓練獲得' : 'Earned via practices, fitness classes & self-training'}</div>
+                                    </div>
+                                    <div className="text-6xl opacity-20">🏆</div>
                                 </div>
                             </div>
 
                             {/* 點數歷史紀錄 */}
                             <div className="mb-6">
-                                <h3 className="font-bold text-gray-800 mb-4">{lang === 'zh' ? '點數歷史紀錄' : 'Points History'}</h3>
-                                {pointsData.history.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {pointsData.history.map((item, index) => (
-                                            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                <div>
-                                                    <div className="font-medium text-gray-800">{item.activity}</div>
-                                                    <div className="text-sm text-gray-500">{item.date}</div>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Clock size={18} className="text-sky-500" />
+                                    {lang === 'zh' ? 'M 點歷史紀錄' : 'M Points History'}
+                                </h3>
+                                {paginatedPointHistory.length > 0 ? (
+                                    <>
+                                        <div className="space-y-2">
+                                            {paginatedPointHistory.map((item) => (
+                                                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
+                                                    <div>
+                                                        <div className="font-medium text-gray-800">{getTranslatedHistoryItem(item.activity)}</div>
+                                                        <div className="text-sm text-gray-500">{item.date}</div>
+                                                    </div>
+                                                    <span className={`font-bold ${item.points > 0 ? 'text-green-600' : 'text-red-500'
+                                                        }`}>
+                                                        {item.points > 0 ? '+' : ''}{item.points} {lang === 'zh' ? 'M點' : 'M Pts'}
+                                                    </span>
                                                 </div>
-                                                <span className="text-green-600 font-bold">+{item.points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
+                                            ))}
+                                        </div>
+
+                                        {/* Pagination Controls */}
+                                        {pointHistoryTotalPages > 1 && (
+                                            <div className="flex items-center justify-end gap-3 mt-3 pt-2 border-t border-gray-100">
+                                                <span className="text-xs text-gray-500">{lang === 'zh' ? `第 ${pointHistoryPage} / ${pointHistoryTotalPages} 頁` : `Page ${pointHistoryPage} of ${pointHistoryTotalPages}`}</span>
+                                                <button
+                                                    onClick={() => setPointHistoryPage(p => Math.max(1, p - 1))}
+                                                    disabled={pointHistoryPage === 1}
+                                                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xs font-bold"
+                                                >
+                                                    {lang === 'zh' ? '❮ 上一頁' : '❮ Prev'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setPointHistoryPage(p => Math.min(pointHistoryTotalPages, p + 1))}
+                                                    disabled={pointHistoryPage >= pointHistoryTotalPages}
+                                                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xs font-bold"
+                                                >
+                                                    {lang === 'zh' ? '下一頁 ❯' : 'Next ❯'}
+                                                </button>
                                             </div>
-                                        ))}
-                                    </div>
+                                        )}
+                                    </>
                                 ) : (
-                                    <div className="text-center text-gray-400 py-4">{lang === 'zh' ? '暫無點數紀錄' : 'No points history'}</div>
+                                    <div className="text-center text-gray-400 py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                        {lang === 'zh' ? '暫無點數紀錄' : 'No points history yet'}
+                                    </div>
                                 )}
                             </div>
 
-                            {/* U幣商品兌換 */}
+                            {/* M點商品兑換 */}
                             <div>
-                                <h3 className="font-bold text-gray-800 mb-4">{lang === 'zh' ? 'U幣商品兌換' : 'Redeem U Coins'}</h3>
-                                <div className="grid sm:grid-cols-3 gap-4">
-                                    {pointsData.products.map((product) => (
-                                        <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition">
-                                            <div className="h-24 bg-gray-100 rounded-lg mb-3 flex items-center justify-center text-gray-400">
-                                                🎁
-                                            </div>
-                                            <div className="font-medium text-gray-800">{product.name}</div>
-                                            <div className="text-yellow-600 font-bold mt-1">{product.price} {lang === 'zh' ? 'U幣' : 'U Coins'}</div>
-                                            <button className="w-full mt-3 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 transition">
-                                                {lang === 'zh' ? '兌換' : 'Redeem'}
-                                            </button>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Star size={18} className="text-yellow-500" />
+                                    {lang === 'zh' ? 'M 點商品兑換' : 'Redeem M Points'}
+                                </h3>
+                                {paginatedProducts.length > 0 ? (
+                                    <>
+                                        <div className="grid sm:grid-cols-3 gap-4">
+                                            {paginatedProducts.map((product) => {
+                                                const canAfford = pointsData.mPoints >= product.price;
+                                                return (
+                                                    <div key={product.id} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden flex flex-col h-full hover:shadow-xl transition-shadow duration-300">
+                                                        <div className="h-48 bg-gray-50 relative overflow-hidden group flex items-center justify-center">
+                                                            {product.image ? (
+                                                                <>
+                                                                    <div className="absolute inset-0 w-full h-full">
+                                                                        <img
+                                                                            src={product.image}
+                                                                            className="w-full h-full object-cover blur-md opacity-40 scale-110"
+                                                                            alt=""
+                                                                        />
+                                                                    </div>
+                                                                    <img
+                                                                        src={product.image}
+                                                                        alt={product.name}
+                                                                        className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105 relative z-10"
+                                                                    />
+                                                                </>
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-4xl relative z-10">🎁</div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="p-5 flex flex-col flex-grow">
+                                                            <h3 className="font-bold text-lg text-gray-800 mb-1">{getTranslatedProductName(product.name)}</h3>
+                                                            <p className="text-sm text-gray-400 font-medium mb-3 min-h-[1.25rem]">{getTranslatedProductDesc(product.description)}</p>
+
+                                                            <div className="mt-auto">
+                                                                <div className="flex items-center justify-between mb-4">
+                                                                    <span className="text-2xl font-bold text-sky-600 font-outfit">{product.price} <span className="text-sm font-normal text-gray-500">{lang === 'zh' ? 'M點' : 'M Pts'}</span></span>
+                                                                    <span className={`text-sm font-bold px-2 py-1 rounded-full ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                                        {lang === 'zh' ? `剩餘: ${product.stock}` : `Stock: ${product.stock}`}
+                                                                    </span>
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        const confirm = await Swal.fire({
+                                                                            title: lang === 'zh' ? '確認兑換？' : 'Confirm Redemption?',
+                                                                            html: `<p>${lang === 'zh' ? '商品' : 'Item'}: <strong>${getTranslatedProductName(product.name)}</strong></p><p>${lang === 'zh' ? '扣除' : 'Cost'}: <strong>${product.price} ${lang === 'zh' ? 'M點' : 'M Pts'}</strong></p>`,
+                                                                            icon: 'question',
+                                                                            showCancelButton: true,
+                                                                            confirmButtonText: lang === 'zh' ? '確認兑換' : 'Redeem',
+                                                                            cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
+                                                                        });
+                                                                        if (!confirm.isConfirmed) return;
+
+                                                                        setRedeemingId(product.id);
+                                                                        try {
+                                                                            const result = await redeemReward(product.id);
+                                                                            if (result.success) {
+                                                                                Swal.fire({ icon: 'success', title: result.message, timer: 2000, showConfirmButton: false });
+                                                                                // 刷新餘額
+                                                                                setPointsData(prev => {
+                                                                                    const newItem = {
+                                                                                        id: Date.now(),
+                                                                                        activity: `${lang === 'zh' ? '兌換' : 'Redeem'}: ${product.name}`,
+                                                                                        date: new Date().toLocaleDateString('zh-TW'),
+                                                                                        points: -product.price,
+                                                                                        type: 'redemption'
+                                                                                    };
+                                                                                    return {
+                                                                                        ...prev,
+                                                                                        mPoints: prev.mPoints - product.price,
+                                                                                        history: [newItem, ...prev.history]
+                                                                                    };
+                                                                                });
+                                                                                setPointHistoryPage(1);
+                                                                            } else {
+                                                                                Swal.fire(lang === 'zh' ? '失敗' : 'Failed', result.message, 'error');
+                                                                            }
+                                                                        } catch (err) {
+                                                                            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', err.message, 'error');
+                                                                        } finally {
+                                                                            setRedeemingId(null);
+                                                                        }
+                                                                    }}
+                                                                    disabled={!canAfford || redeemingId === product.id || product.stock <= 0}
+                                                                    className={`w-full py-3 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 transform active:scale-95 ${canAfford && redeemingId !== product.id && product.stock > 0
+                                                                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg hover:shadow-blue-200 hover:-translate-y-0.5'
+                                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                                        }`}
+                                                                >
+                                                                    {redeemingId === product.id ? (lang === 'zh' ? '處理中...' : 'Processing...') :
+                                                                        product.stock <= 0 ? (lang === 'zh' ? '已兌換完畢' : 'Out of Stock') :
+                                                                            canAfford ? (lang === 'zh' ? '兌換' : 'Redeem') : (lang === 'zh' ? 'M點不足' : 'Need More Points')}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    ))}
-                                </div>
+
+
+                                        {/* Product Pagination Controls */}
+                                        {productTotalPages > 1 && (
+                                            <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-100">
+                                                <span className="text-xs text-gray-500">{lang === 'zh' ? `第 ${productPage} / ${productTotalPages} 頁` : `Page ${productPage} of ${productTotalPages}`}</span>
+                                                <button
+                                                    onClick={() => setProductPage(p => Math.max(1, p - 1))}
+                                                    disabled={productPage === 1}
+                                                    className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xs font-bold"
+                                                >
+                                                    {lang === 'zh' ? '❮ 上一頁' : '❮ Prev'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setProductPage(p => Math.min(productTotalPages, p + 1))}
+                                                    disabled={productPage >= productTotalPages}
+                                                    className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition text-xs font-bold"
+                                                >
+                                                    {lang === 'zh' ? '下一頁 ❯' : 'Next ❯'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="text-center text-gray-400 py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                        {lang === 'zh' ? '目前沒有可兑換的商品' : 'No redeemable items yet'}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

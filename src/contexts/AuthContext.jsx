@@ -43,10 +43,13 @@ export function AuthProvider({ children }) {
     // 取得使用者的角色列表
     const fetchUserRoles = useCallback(async (userId, email = null) => {
         // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
+        // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
         const EMAIL_ROLE_MAP = {
             'rumadragonboat@gmail.com': [ROLES.ADMIN],
             'kenny.chen.tpe@gmail.com': [ROLES.MANAGEMENT],
-            'n79928@gmail.com': [ROLES.MANAGEMENT]
+            'n79928@gmail.com': [ROLES.MANAGEMENT],
+            'tanpennee9307@gmail.com': [ROLES.MANAGEMENT],
+            'irene.c0102@gmail.com': [ROLES.MANAGEMENT]
         };
 
         try {
@@ -86,19 +89,17 @@ export function AuthProvider({ children }) {
             let querySuccess = false;
 
             try {
-                const queryPromise = supabase
-                    .from('user_roles')
-                    .select('roles (name)')
-                    .eq('user_id', userId);
+                const queryPromise = supabase.rpc('get_my_roles');
 
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Role query timeout')), 3000);
+                    setTimeout(() => reject(new Error('Role query timeout')), 5000); // 5s timeout
                 });
 
                 const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-                if (!error && data && data.length > 0) {
-                    roles = data.map(item => item.roles?.name).filter(Boolean);
+                if (!error && data) {
+                    // RPC returns [{ role_name: 'admin' }, ...]
+                    roles = data.map(item => item.role_name).filter(Boolean);
                     querySuccess = true;
                     if (import.meta.env.DEV) console.log('資料庫取得角色成功:', roles);
                 } else if (error) {
@@ -244,7 +245,7 @@ export function AuthProvider({ children }) {
                 id: authUser.id,
                 email: authUser.email,
                 name: authUser.user_metadata?.name || profile.name || authUser.email?.split('@')[0],
-                avatar_url: authUser.user_metadata?.avatar_url || null
+                avatar_url: authUser.user_metadata?.avatar_url || profile.avatar_url || null
             };
 
             setUserProfile(finalProfile);
@@ -336,10 +337,10 @@ export function AuthProvider({ children }) {
                 }
 
                 if (event === 'SIGNED_IN' && session?.user) {
-                    // 新登入時清除快取，強制重新查詢角色
-                    // 防止使用舊的錯誤快取
+                    // 新登入時清除快取 (僅記憶體)，並重新查詢角色
+                    // 保留 localStorage 快取以供 fallback 使用
                     roleCache.delete(session.user.id);
-                    localStorage.removeItem(`user_roles_${session.user.id}`);
+                    // localStorage.removeItem(`user_roles_${session.user.id}`); // 移除此行，保留本地快取作為備援
 
                     // 防止重複處理同一個用戶 (但不影響全新登入)
                     if (lastProcessedUserId === session.user.id && user?.id === session.user.id) {

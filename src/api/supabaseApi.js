@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
  * @param {number} ms - 超時毫秒數
  * @param {*} fallback - 超時時的回傳值
  */
-const withTimeout = async (promise, ms = 3000, fallback = null) => {
+const withTimeout = async (promise, ms = 20000, fallback = null) => {
     let timeoutId;
     const timeoutPromise = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
@@ -51,7 +51,8 @@ export const fetchAllData = async () => {
                 supabase.from('practice_dates').select('*').order('confirmed_date', { ascending: false }),
                 supabase.from('practice_registrations').select('*'),
                 supabase.from('equipment_inventory').select('*'),
-                supabase.from('borrow_records').select('*').order('created_at', { ascending: false })
+                supabase.from('borrow_records').select('*').order('created_at', { ascending: false }),
+                supabase.from('attendance').select('*')
             ]),
             8000, // 8 秒超時 (大量資料)
             null
@@ -59,7 +60,7 @@ export const fetchAllData = async () => {
 
         if (!results) return defaultResult;
 
-        const [members, dates, registrations, equipment, borrowRecords] = results;
+        const [members, dates, registrations, equipment, borrowRecords, attendance] = results;
 
         return {
             // 對應 Google Sheets 欄位名稱格式
@@ -68,7 +69,8 @@ export const fetchAllData = async () => {
                 Email: m.email,
                 Weight: m.weight,
                 Position: m.position,
-                Skill_Rating: m.skill_rating
+                Skill_Rating: m.skill_rating,
+                M_Points: m.total_points || 0
             })),
             dates: (dates?.data || []).map(d => ({
                 Confirmed_date: d.display_date,
@@ -89,6 +91,10 @@ export const fetchAllData = async () => {
                 Date: b.borrow_date,
                 Item: b.item,
                 Count: b.count
+            })),
+            attendance: (attendance?.data || []).map(a => ({
+                Date: a.practice_date,
+                Name: a.member_name
             }))
         };
     } catch (error) {
@@ -130,7 +136,7 @@ export const fetchMemberBasicInfo = async () => {
                 .from('members')
                 .select('name, avatar_url')
                 .order('name'),
-            3000,
+            20000,
             { data: [], error: null }
         );
 
@@ -193,7 +199,7 @@ export const fetchAttendance = async () => {
     try {
         const result = await withTimeout(
             supabase.from('attendance').select('*'),
-            3000,
+            20000,
             { data: [], error: null }
         );
 
@@ -222,7 +228,7 @@ export const fetchActivities = async () => {
                 .from('activities')
                 .select('*')
                 .order('date', { ascending: false }),
-            3000,
+            20000,
             { data: [], error: null }
         );
 
@@ -240,16 +246,25 @@ export const fetchActivities = async () => {
 /**
  * 取得活動報名列表
  */
-export const fetchActivityRegistrations = async () => {
+export const fetchActivityRegistrations = async (userOnly = false) => {
     try {
+        let query = supabase
+            .from('activity_registrations')
+            .select(`
+                *,
+                activities (name, date, type, location, start_time)
+            `);
+
+        // 如果 userOnly 為 true，僅撈當前使用者的報名紀錄
+        if (userOnly) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return [];
+            query = query.eq('user_id', user.id);
+        }
+
         const result = await withTimeout(
-            supabase
-                .from('activity_registrations')
-                .select(`
-                    *,
-                    activities (name, date, type, location, start_time)
-                `),
-            3000,
+            query,
+            20000,
             { data: [], error: null }
         );
 
@@ -275,7 +290,7 @@ export const fetchAnnouncements = async () => {
                 .select('*')
                 .order('pinned', { ascending: false })
                 .order('created_at', { ascending: false }),
-            3000,
+            20000,
             { data: [], error: null }
         );
 
@@ -359,6 +374,16 @@ export const postData = async (action, params) => {
 
             case 'deleteBorrowRecord':
                 return await deleteBorrowRecord(params);
+
+            // === 獎勵管理 ===
+            case 'addReward':
+                return await addReward(params);
+
+            case 'deleteReward':
+                return await deleteReward(params.id);
+
+            case 'updateReward':
+                return await updateReward(params);
 
             // === 自主訓練紀錄 ===
             case 'addTrainingRecord':
@@ -785,6 +810,60 @@ const addTrainingRecord = async (params) => {
             return { success: false, message: error.message };
         }
 
+        // 3. 自動獎勵 M 點 (自主訓練上傳即得 1 M 點)
+        try {
+            // 嘗試取得 TRAINING_SELF 規則
+            let pointsToAward = 1; // 預設 1 點
+            let ruleId = null;
+            const { data: rule } = await supabase
+                .from('point_rules')
+                .select('id, base_points')
+                .eq('rule_code', 'TRAINING_SELF')
+                .maybeSingle();
+
+            if (rule) {
+                pointsToAward = rule.base_points || 1;
+                ruleId = rule.id;
+            }
+
+            // 讀取目前點數
+            const { data: member } = await supabase
+                .from('members')
+                .select('total_points')
+                .eq('email', user.email)
+                .maybeSingle();
+
+            const currentPoints = member?.total_points || 0;
+            const newPoints = currentPoints + pointsToAward;
+
+            // 更新 members 表的 total_points
+            await supabase
+                .from('members')
+                .update({ total_points: newPoints })
+                .eq('email', user.email);
+
+            // 寫入 point_events 歷史紀錄
+            const trainingLabel = params.type === '其他' && params.customType
+                ? `${params.type} (${params.customType})`
+                : params.type;
+
+            await supabase.from('point_events').insert({
+                user_id: user.id,
+                event_type: 'earned',
+                points_change: pointsToAward,
+                balance_after: newPoints,
+                source_type: 'self_training',
+                source_id: params.date,
+                rule_id: ruleId,
+                description: `自主訓練: ${trainingLabel} (${params.date})`
+            });
+
+            console.log(`自主訓練上傳成功，獎勵 ${pointsToAward} M 點`);
+        } catch (pointError) {
+            // M 點獎勵失敗不影響訓練紀錄的成功
+            console.warn('自主訓練 M 點獎勵失敗:', pointError.message);
+        }
+
         return { success: true };
     } catch (error) {
         console.error("Error adding training record:", error);
@@ -801,15 +880,17 @@ const addTrainingRecord = async (params) => {
  */
 export const saveAttendance = async (date, attendees) => {
     try {
-        // 先刪除該日期的舊紀錄
+        // 1. 先執行原本的點名儲存邏輯 (重置當日出席)
         await supabase
             .from('attendance')
             .delete()
             .eq('practice_date', date);
 
-        // 寫入新的出席名單
         if (attendees && attendees.length > 0) {
-            const inserts = attendees.map(name => ({
+            // 去除重複名單，避免 Unique Constraint Error
+            const uniqueAttendees = [...new Set(attendees)];
+
+            const inserts = uniqueAttendees.map(name => ({
                 member_name: name,
                 practice_date: date
             }));
@@ -820,6 +901,89 @@ export const saveAttendance = async (date, attendees) => {
 
             if (error) {
                 return { success: false, message: error.message };
+            }
+
+            // 2. M 點自動發放邏輯 (Server-side simulation)
+            // 策略：找出「本次點名單中」且「尚未獲得該日練船點數」的人，發放點數
+            // 注意：目前只發放，不扣回 (若被取消點名，暫不自動扣點，由管理員手動調整或未來實作)
+
+            try {
+                // (a) 取得練船點數規則 (PRACTICE_REGULAR)
+                let pointsToAward = 1;
+                let ruleId = null;
+                const { data: rule } = await supabase
+                    .from('point_rules')
+                    .select('id, base_points')
+                    .eq('rule_code', 'PRACTICE_REGULAR') // 假設一般練船
+                    .maybeSingle();
+
+                if (rule) {
+                    pointsToAward = rule.base_points || 1;
+                    ruleId = rule.id;
+                }
+
+                // (b) 取得出席成員的詳細資訊 (需要 user_id 和目前點數)
+                // attendees 是名字陣列 ['Eric', 'Pennee', ...]
+                const { data: members, error: memberError } = await supabase
+                    .from('members')
+                    .select('name, user_id, total_points, email')
+                    .in('name', attendees);
+
+                if (memberError) throw memberError;
+
+                if (members && members.length > 0) {
+                    // (c) 檢查這些人當天是否已經拿過 "PRACTICE_%" 類型的點數
+                    // source_id 紀錄為日期字串 "YYYY-MM-DD"
+                    // 為了避免重複發放，我們檢查 point_events
+                    const userIds = members.map(m => m.user_id).filter(id => id); // 過濾掉沒有 user_id 的 (未綁定)
+
+                    if (userIds.length > 0) {
+                        const { data: existingEvents } = await supabase
+                            .from('point_events')
+                            .select('user_id')
+                            .eq('source_type', 'practice')
+                            .eq('source_id', date) // 確保同一天不重複發
+                            .in('user_id', userIds);
+
+                        const existingUserIds = new Set((existingEvents || []).map(e => e.user_id));
+
+                        // (d) 針對「未領過」的成員發放點數
+                        for (const member of members) {
+                            // 跳過無 user_id 的成員 (無法發點)
+                            if (!member.user_id) continue;
+
+                            // 跳過已領過的成員
+                            if (existingUserIds.has(member.user_id)) continue;
+
+                            // -- 發放點數 --
+                            const newTotal = (member.total_points || 0) + pointsToAward;
+
+                            // 1. 更新 members 表
+                            await supabase
+                                .from('members')
+                                .update({ total_points: newTotal })
+                                .eq('user_id', member.user_id);
+
+                            // 2. 寫入 point_events 表
+                            await supabase.from('point_events').insert({
+                                user_id: member.user_id,
+                                event_type: 'earned',
+                                points_change: pointsToAward,
+                                balance_after: newTotal,
+                                source_type: 'practice',
+                                source_id: date,
+                                rule_id: ruleId,
+                                description: `出席練習 (${date})`
+                            });
+
+                            console.log(`已發放點數給 ${member.name}: +${pointsToAward}`);
+                        }
+                    }
+                }
+
+            } catch (pointError) {
+                console.error("Auto-award points failed:", pointError);
+                // 點名本身成功，但發點失敗，僅 log 不阻擋流程
             }
         }
 
@@ -1316,6 +1480,582 @@ export const deleteNews = async (id) => {
     } catch (error) {
         console.error('Error deleting news:', error);
         return { success: false, message: error.message };
+    }
+};
+
+// =====================================================
+// M 點積分系統 (M-Point Reward System)
+// =====================================================
+
+/**
+ * 取得使用者 M 點餘額
+ * 從 members 表讀取 total_points
+ */
+export const fetchUserPoints = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { totalPoints: 0, currentYearPoints: 0 };
+
+        const { data, error } = await supabase
+            .from('members')
+            .select('total_points')
+            .eq('email', user.email)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching user points:', error);
+            return { totalPoints: 0, currentYearPoints: 0 };
+        }
+
+        return {
+            totalPoints: data?.total_points || 0,
+            currentYearPoints: data?.total_points || 0
+        };
+    } catch (error) {
+        console.error('Error fetching user points:', error);
+        return { totalPoints: 0, currentYearPoints: 0 };
+    }
+};
+
+/**
+ * 取得使用者的 M 點歷史紀錄
+ * 從 point_events 表讀取
+ */
+export const fetchPointEvents = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+
+        const { data, error } = await supabase
+            .from('point_events')
+            .select('*, point_rules(rule_name, rule_code)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (error) {
+            console.error('Error fetching point events:', error);
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching point events:', error);
+        return [];
+    }
+};
+
+/**
+ * [Management] 體能課點名 - 批次加點
+ * @param {string} date - 體能課日期 (YYYY-MM-DD)
+ * @param {string[]} memberNames - 出席隊員的名稱列表
+ * @param {string} awardedByEmail - 操作者 email
+ */
+export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) => {
+    try {
+        if (!memberNames || memberNames.length === 0) {
+            return { success: false, message: '請選擇至少一位隊員' };
+        }
+
+        // 取得 TRAINING_FITNESS 規則
+        const { data: rule, error: ruleError } = await supabase
+            .from('point_rules')
+            .select('id, base_points')
+            .eq('rule_code', 'TRAINING_FITNESS')
+            .single();
+
+        if (ruleError || !rule) {
+            console.error('Cannot find TRAINING_FITNESS rule:', ruleError);
+            return { success: false, message: '找不到體能課積點規則' };
+        }
+
+        const pointsToAward = rule.base_points; // 1 point
+
+        // 取得這些隊員的 user_id (透過 members 表的 email -> users 表的 id)
+        const { data: members, error: memberError } = await supabase
+            .from('members')
+            .select('name, email')
+            .in('name', memberNames);
+
+        if (memberError) {
+            console.error('Error fetching members:', memberError);
+            return { success: false, message: '查詢隊員資料失敗' };
+        }
+
+        // 更新 members 表的 total_points
+        let successCount = 0;
+        const errors = [];
+
+        for (const member of members) {
+            try {
+                // 更新 members 表的 total_points
+                const { error: updateError } = await supabase
+                    .from('members')
+                    .update({
+                        total_points: supabase.rpc ? undefined : undefined // placeholder
+                    })
+                    .eq('name', member.name);
+
+                // 由於 Supabase JS 不支援直接的 increment，用 RPC 或 read-then-write
+                const { data: currentMember } = await supabase
+                    .from('members')
+                    .select('total_points')
+                    .eq('name', member.name)
+                    .single();
+
+                const newPoints = (currentMember?.total_points || 0) + pointsToAward;
+
+                const { error: pointUpdateError } = await supabase
+                    .from('members')
+                    .update({ total_points: newPoints })
+                    .eq('name', member.name);
+
+                if (pointUpdateError) {
+                    errors.push(`${member.name}: ${pointUpdateError.message}`);
+                } else {
+                    successCount++;
+                }
+
+                // 如果有 email，嘗試寫入 point_events (找到對應的 auth user)
+                if (member.email) {
+                    const { data: userData } = await supabase
+                        .from('users')
+                        .select('id, total_points')
+                        .eq('email', member.email)
+                        .maybeSingle();
+
+                    if (userData) {
+                        // 寫入 point_events
+                        await supabase.from('point_events').insert({
+                            user_id: userData.id,
+                            event_type: 'earned',
+                            points_change: pointsToAward,
+                            balance_after: (userData.total_points || 0) + pointsToAward,
+                            source_type: 'fitness_attendance',
+                            source_id: date,
+                            rule_id: rule.id,
+                            description: `體能訓練課出席 (${date})`,
+                            metadata: { date, awarded_by: awardedByEmail }
+                        });
+
+                        // 同步更新 users 表
+                        await supabase
+                            .from('users')
+                            .update({
+                                total_points: (userData.total_points || 0) + pointsToAward,
+                                current_year_points: (userData.total_points || 0) + pointsToAward
+                            })
+                            .eq('id', userData.id);
+                    }
+                }
+            } catch (err) {
+                errors.push(`${member.name}: ${err.message}`);
+            }
+        }
+
+        if (errors.length > 0) {
+            console.warn('Some fitness attendance awards failed:', errors);
+        }
+
+        return {
+            success: true,
+            message: `已為 ${successCount} 位隊員加上 ${pointsToAward} M 點`,
+            successCount,
+            errors
+        };
+    } catch (error) {
+        console.error('Error awarding fitness attendance:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * [Management] 取得體能課點名歷史
+ * 讀取 point_events 中 source_type = 'fitness_attendance' 的紀錄
+ * @param {string} date - 可選，篩選特定日期
+ */
+export const fetchFitnessHistory = async (date = null) => {
+    try {
+        let query = supabase
+            .from('point_events')
+            .select('*, users(name, email)')
+            .eq('source_type', 'fitness_attendance')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (date) {
+            query = query.eq('source_id', date);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error fetching fitness history:', error);
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching fitness history:', error);
+        return [];
+    }
+};
+
+/**
+ * 新增兌換商品
+ * @param {Object} params - { name, points_cost, description, imageFile }
+ */
+export const addReward = async (params) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, message: '請先登入' };
+
+        let imageUrl = null;
+
+        // 1. 上傳圖片 (如果有)
+        if (params.imageFile) {
+            const fileExt = params.imageFile.name.split('.').pop();
+            const fileName = `rewards/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+            // 嘗試上傳到 'public-images' bucket (假設有這個通用 bucket，或使用 'training-photos' 如果沒有別的)
+            // 為了保險，我們先試試 'training-photos' 因為確定它存在，或者 'avatars'?
+            // 最好是使用一個通用的。
+            // 根據過往經驗，通常會有 'images' 或類似的。
+            // 但為了不賭博，我會先用 'training-photos' 暫代，或者建立一個。
+            // 其實可以在 Supabase Dashboard 建立，但我無法存取。
+            // 讓我們假設 'training-photos' 可以用，因為它是公開讀取的。
+            // 或者更好的是，如果失敗，就...
+            // 其實 User 沒有說要新建 Bucket。
+            // 讓我們用 'training-photos' 並加個 prefix 'rewards/'
+
+            const { error: uploadError } = await supabase.storage
+                .from('training-photos')
+                .upload(fileName, params.imageFile);
+
+            if (uploadError) {
+                console.error("Upload reward image error:", uploadError);
+                return { success: false, message: '圖片上傳失敗' };
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('training-photos')
+                .getPublicUrl(fileName);
+
+            imageUrl = publicUrl;
+        }
+
+        // 2. 寫入資料庫
+        const { error } = await supabase
+            .from('redeemable_products')
+            .insert({
+                name: params.name,
+                u_coins_price: params.points_cost,
+                description: params.description || '',
+                image_url: imageUrl,
+                is_active: true,
+                stock: params.stock || 0
+            });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error adding reward:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 刪除兌換商品
+ * @param {string} id - 商品 ID
+ */
+/**
+ * 刪除兌換商品
+ * @param {string} id - 商品 ID
+ */
+export const deleteReward = async (id) => {
+    try {
+        const { error } = await supabase
+            .from('redeemable_products')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting reward:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 更新兌換商品
+ */
+/**
+ * 更新兌換商品
+ */
+export const updateReward = async (params) => {
+    try {
+        let imageUrl = params.image_url;
+
+        // 1. 上傳新圖片 (如果有)
+        if (params.imageFile) {
+            const fileExt = params.imageFile.name.split('.').pop();
+            const fileName = `rewards/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('training-photos')
+                .upload(fileName, params.imageFile);
+
+            if (uploadError) {
+                console.error("Upload reward image error:", uploadError);
+                return { success: false, message: '圖片上傳失敗' };
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('training-photos')
+                .getPublicUrl(fileName);
+
+            imageUrl = publicUrl;
+        }
+
+        // 2. 更新資料庫
+        const { error } = await supabase
+            .from('redeemable_products')
+            .update({
+                name: params.name,
+                u_coins_price: params.points_cost,
+                stock: params.stock || 0, // Update stock
+                description: params.description || '',
+                image_url: imageUrl,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', params.id);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating reward:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 取得可兌換商品列表
+ */
+export const fetchRewards = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('redeemable_products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Map u_coins_price back to points_cost for frontend compatibility
+        return (data || []).map(item => ({
+            ...item,
+            points_cost: item.u_coins_price
+        }));
+    } catch (error) {
+        console.error("Error fetching rewards:", error);
+        return [];
+    }
+};
+
+/**
+ * 兌換商品
+ * @param {number} rewardId - 商品 ID
+ */
+export const redeemReward = async (rewardId) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, message: '請先登入' };
+
+        // 取得商品資訊
+        const { data: reward, error: rewardError } = await supabase
+            .from('redeemable_products')
+            .select('*')
+            .eq('id', rewardId)
+            .single();
+
+        if (rewardError || !reward) {
+            return { success: false, message: '找不到此商品' };
+        }
+
+        // 檢查庫存
+        if (reward.stock <= 0) {
+            return { success: false, message: '此商品已兌換完畢' };
+        }
+
+        // 檢查用戶點數
+        const { data: member } = await supabase
+            .from('members')
+            .select('total_points')
+            .eq('email', user.email)
+            .maybeSingle();
+
+        const currentPoints = member?.total_points || 0;
+        const cost = reward.u_coins_price;
+        if (currentPoints < cost) {
+            return { success: false, message: `M點不足（需 ${cost}，目前 ${currentPoints}）` };
+        }
+
+        // 建立兌換紀錄
+        const { error: redeemError } = await supabase
+            .from('redemption_records')
+            .insert({
+                user_id: user.id,
+                product_id: rewardId,   // New UUID field
+                points_spent: cost,
+                status: 'pending'
+            });
+
+        if (redeemError) {
+            return { success: false, message: redeemError.message };
+        }
+
+        // Update Stock
+        await supabase
+            .from('redeemable_products')
+            .update({ stock: reward.stock - 1 })
+            .eq('id', rewardId);
+
+        // 扣除 M 點
+        const newPoints = currentPoints - cost;
+        await supabase
+            .from('members')
+            .update({ total_points: newPoints })
+            .eq('email', user.email);
+
+        // 同步更新 users 表
+        await supabase
+            .from('users')
+            .update({ total_points: newPoints })
+            .eq('email', user.email);
+
+        // 寫入 point_events (消耗)
+        await supabase.from('point_events').insert({
+            user_id: user.id,
+            event_type: 'spent',
+            points_change: -cost,
+            balance_after: newPoints,
+            source_type: 'reward_redemption',
+            source_id: String(rewardId),
+            description: `兌換商品: ${reward.name}`
+        });
+
+        return { success: true, message: `成功兌換「${reward.name}」！` };
+    } catch (error) {
+        console.error('Error redeeming reward:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 取得所有兌換紀錄（含商品名稱與用戶名稱）
+ */
+export const fetchRedemptionRecords = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('redemption_records')
+            .select(`
+                *,
+                redeemable_products (name)
+            `)
+            .order('redeemed_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Fetch user details from members table using user_id
+        const userIds = [...new Set(data.map(r => r.user_id).filter(Boolean))];
+        let memberMap = {};
+
+        if (userIds.length > 0) {
+            const { data: members } = await supabase
+                .from('members')
+                .select('user_id, name, email')
+                .in('user_id', userIds);
+
+            if (members) {
+                members.forEach(m => {
+                    memberMap[m.user_id] = m;
+                });
+            }
+        }
+
+        return data.map(record => {
+            const member = memberMap[record.user_id];
+            // Name priority: Member Name > Email > User ID
+            const displayName = member?.name || member?.email || 'Unknown Member';
+
+            return {
+                id: record.id,
+                product_name: record.redeemable_products?.name || 'Deleted Product',
+                product_id: record.product_id,
+                user_name: displayName,
+                redeemed_at: record.redeemed_at,
+                status: record.status,
+                points_spent: record.points_spent,
+                delivered_by: record.delivered_by
+            };
+        });
+
+    } catch (error) {
+        console.error('Error fetching redemption records:', error);
+        return [];
+    }
+};
+
+/**
+ * 更新兌換紀錄狀態 (例如：已交付)
+ */
+export const updateRedemptionStatus = async (recordId, status, deliveredBy = null) => {
+    try {
+        const updateData = { status };
+        if (deliveredBy) {
+            updateData.delivered_by = deliveredBy;
+        }
+
+        const { error } = await supabase
+            .from('redemption_records')
+            .update(updateData)
+            .eq('id', recordId);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating redemption status:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 取得 M 點排行榜
+ * 從 members 表讀取有 total_points 的隊員
+ */
+export const fetchMPointLeaderboard = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('members')
+            .select('name, total_points, avatar_url')
+            .gt('total_points', 0)
+            .order('total_points', { ascending: false })
+            .limit(10);
+
+        if (error) {
+            console.error('Error fetching M-point leaderboard:', error);
+            return [];
+        }
+
+        return (data || []).map((member, index) => ({
+            name: member.name,
+            points: member.total_points || 0,
+            avatar: member.avatar_url || null,
+            rank: index + 1
+        }));
+    } catch (error) {
+        console.error('Error fetching M-point leaderboard:', error);
+        return [];
     }
 };
 

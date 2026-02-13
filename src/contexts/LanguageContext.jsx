@@ -110,16 +110,16 @@ const translations = {
 
         // Backend App - Dashboard
         dash_welcome: '歡迎回來，',
-        dash_today_msg: '今天也要努力練習！',
+        dash_today_msg: '今天也要努力提升自己喔！',
         dash_upload_training: '📸 上傳自主訓練紀錄',
         dash_register_now: '立即報名活動 →',
         dash_total_points: '累積M點',
         dash_monthly_practice: '本月練習',
-        dash_streak: '連續週出席',
-        dash_rank: '月度排名',
+        dash_streak: '連續出席',
+        dash_rank: '本月排名',
         dash_upcoming: '📅 近期開放報名活動',
         dash_no_activities: '目前無開放報名的活動',
-        dash_my_points: '🏆 我的M點及U幣',
+        dash_my_points: '🏆 我的M點',
         dash_no_badges: '尚無徽章',
         dash_badge_newbie: '新手啟航',
 
@@ -207,7 +207,7 @@ const translations = {
         prac_no_activities: '目前無開放報名的活動',
 
         // My Journey Page
-        journey_title: '我的龍船旅程',
+        journey_title: '我的龍舟旅程',
         journey_activities: '活動報名',
         journey_training: '自主訓練',
         journey_achievements: '成就記錄',

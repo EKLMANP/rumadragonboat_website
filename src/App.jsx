@@ -110,7 +110,7 @@ function App() {
               }
             />
 
-            {/* 我的M點及U幣 - 導向 MyJourneyPage 的 points tab */}
+            {/* 我的M點 - 導向 MyJourneyPage 的 points tab */}
             <Route
               path="/app/points"
               element={

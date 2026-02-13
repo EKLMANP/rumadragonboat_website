@@ -32,29 +32,28 @@ export default function EquipmentPage() {
         }
     };
 
-    // 根據裝備類型顯示不同圖示
+    // 翻譯裝備名稱
+    const getTranslatedItemName = (name) => {
+        if (!name) return '';
+        if (lang === 'zh') return name;
+
+        if (name.includes('救生衣')) return 'Life Jacket';
+        if (name.includes('木槳')) return 'Wooden Paddle';
+        if (name.includes('碳纖')) return 'Carbon Paddle';
+        if (name.includes('帽')) return 'Cap';
+
+        return name;
+    };
+
+    // 根據裝備類型顯示不同圖示 (已移除特定項目的圖示)
     const getEquipmentIcon = (item) => {
         const name = item?.Item?.toLowerCase() || '';
 
-        // 木槳 - 棕色槳葉
-        if (name.includes('木槳')) {
-            return (
-                <svg viewBox="0 0 24 24" className="w-10 h-10 text-amber-700" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2V12C12 12 16 13 16 17C16 20.5 14.5 22 12 22C9.5 22 8 20.5 8 17C8 13 12 12 12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" fillOpacity="0.4" />
-                </svg>
-            );
+        // 用戶要求移除這三項的圖示
+        if (name.includes('木槳') || name.includes('碳纖') || name.includes('carbon') || name.includes('救生衣')) {
+            return null;
         }
 
-        // 碳纖槳 - 黑色實心
-        if (name.includes('碳纖') || name.includes('carbon')) {
-            return (
-                <svg viewBox="0 0 24 24" className="w-10 h-10 text-gray-800" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2V12C12 12 16 13 16 17C16 20.5 14.5 22 12 22C9.5 22 8 20.5 8 17C8 13 12 12 12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="currentColor" />
-                </svg>
-            );
-        }
-
-        if (name.includes('救生衣')) return <span className="text-3xl">🦺</span>;
         if (name.includes('帽')) return <span className="text-3xl">🧢</span>;
         return <span className="text-3xl">📦</span>;
     };
@@ -102,17 +101,41 @@ export default function EquipmentPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {equipment.map((item, idx) => (
-                                <div
-                                    key={idx}
-                                    className="bg-sky-50 p-6 rounded-xl flex flex-col items-center justify-center text-center hover:bg-sky-100 transition border border-sky-100"
-                                >
-                                    <span className="mb-2 flex items-center justify-center h-12">{getEquipmentIcon(item)}</span>
-                                    <span className="text-gray-600 font-medium mb-1">{item.Item}</span>
-                                    <span className="text-4xl font-bold text-sky-600">{item.Count}</span>
-                                    <span className="text-xs text-gray-400 mt-1">{lang === 'zh' ? '庫存數量' : 'In Stock'}</span>
-                                </div>
-                            ))}
+                            {equipment.map((item, idx) => {
+                                const getEquipmentImage = (name) => {
+                                    if (!name) return null;
+                                    const n = name.toLowerCase();
+                                    if (n.includes('救生衣') || n.includes('life jacket')) return '/Life jacket.png';
+                                    if (n.includes('木槳') || n.includes('wooden paddle')) return '/Wooden paddle.png';
+                                    if (n.includes('碳纖') || n.includes('carbon paddle')) return '/carbon paddle.png';
+                                    return null;
+                                };
+                                const imgUrl = getEquipmentImage(item.Item);
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className="bg-sky-50 p-6 rounded-xl flex flex-col items-center justify-center text-center hover:bg-sky-100 transition border border-sky-100 group"
+                                    >
+                                        <span className="mb-2 flex items-center justify-center h-24 w-24">
+                                            {imgUrl ? (
+                                                <div className="w-24 h-24 rounded-full bg-white shadow flex items-center justify-center border-4 border-white overflow-hidden">
+                                                    <img
+                                                        src={imgUrl}
+                                                        alt={item.Item}
+                                                        className="w-full h-full object-contain p-2 transform group-hover:scale-110 transition duration-500"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                getEquipmentIcon(item)
+                                            )}
+                                        </span>
+                                        <span className="text-gray-600 font-medium mb-1 font-bold text-lg">{getTranslatedItemName(item.Item)}</span>
+                                        <span className="text-4xl font-bold text-sky-600">{item.Count}</span>
+                                        <span className="text-xs text-gray-400 mt-1">{lang === 'zh' ? '庫存數量' : 'In Stock'}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -157,7 +180,7 @@ export default function EquipmentPage() {
                                             </td>
                                             <td className="p-4">
                                                 <span className="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">
-                                                    {record.Item}
+                                                    {getTranslatedItemName(record.Item)}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-center">

@@ -21,10 +21,10 @@ export default function AppLayout({ children }) {
             {/* 主內容區 */}
             <div className="flex-1 lg:ml-64 flex flex-col min-h-screen max-w-full overflow-x-hidden">
                 {/* Mobile Header */}
-                <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                <header className="lg:hidden bg-black border-b border-zinc-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
                     <button
                         onClick={toggleSidebar}
-                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="p-2 text-white hover:bg-zinc-800 rounded-lg transition-colors"
                     >
                         <Menu size={24} />
                     </button>
@@ -37,7 +37,7 @@ export default function AppLayout({ children }) {
                     </Link>
                     <button
                         onClick={toggleLanguage}
-                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
+                        className="p-2 text-white hover:bg-zinc-800 rounded-lg transition-colors flex items-center gap-1"
                         title={lang === 'zh' ? 'Switch to English' : '切換至中文'}
                     >
                         <Globe size={20} />

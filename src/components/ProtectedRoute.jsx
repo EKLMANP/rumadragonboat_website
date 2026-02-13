@@ -36,7 +36,7 @@ export default function ProtectedRoute({
                 const timeoutPromise = new Promise((_, reject) => {
                     timeoutId = setTimeout(() => {
                         reject(new Error('Session check timeout'));
-                    }, 3000); // 3 秒超時
+                    }, 15000); // 15 秒超時
                 });
 
                 const sessionPromise = supabase.auth.getSession();
