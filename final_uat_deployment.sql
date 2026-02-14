@@ -254,12 +254,13 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Part 2: Set up RLS Policies for 'avatars'
 -- Allow public read access to avatars
+DROP POLICY IF EXISTS "Public Access to Avatars" ON storage.objects;
 CREATE POLICY "Public Access to Avatars"
 ON storage.objects FOR SELECT
 USING ( bucket_id = 'avatars' );
 
 -- Allow authenticated users to upload their own avatar
--- (We use a broad policy here to ensure it works, refining later if needed)
+DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
 CREATE POLICY "Authenticated users can upload avatars"
 ON storage.objects FOR INSERT
 WITH CHECK (
@@ -268,6 +269,7 @@ WITH CHECK (
 );
 
 -- Allow users to update their own avatar
+DROP POLICY IF EXISTS "Authenticated users can update avatars" ON storage.objects;
 CREATE POLICY "Authenticated users can update avatars"
 ON storage.objects FOR UPDATE
 USING (

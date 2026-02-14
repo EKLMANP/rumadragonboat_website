@@ -6,15 +6,31 @@ export default function NewsContentRenderer({ content }) {
 
     const renderTextWithLinks = (text) => {
         if (!text) return null;
-        return text.split(/(\[[^\]]+\]\([^)]+\))/g).map((part, i) => {
-            const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+        // Split by bold (**...**) and links ([...](...))
+        // Regex explanation:
+        // (\*\*.*?\*\*) matches **bold**
+        // (\[[^\]]+\]\([^)]+\)) matches [link](url)
+        return text.split(/(\*\*.*?\*\*|\[[^\]]+\]\([^)]+\))/g).map((part, i) => {
+            // Check for Bold
+            const boldMatch = part.match(/^\*\*(.*?)\*\*$/);
+            if (boldMatch) {
+                return <strong key={i} className="font-bold text-white">{boldMatch[1]}</strong>;
+            }
+
+            // Check for Link
+            const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
             if (linkMatch) {
+                const url = linkMatch[2];
+                const isInternal = url.startsWith('#');
+                const target = isInternal ? undefined : "_blank";
+                const rel = isInternal ? undefined : "noopener noreferrer";
+
                 return (
                     <a
                         key={i}
-                        href={linkMatch[2]}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={url}
+                        target={target}
+                        rel={rel}
                         className="text-red-400 hover:text-red-300 underline"
                     >
                         {linkMatch[1]}
@@ -29,7 +45,7 @@ export default function NewsContentRenderer({ content }) {
         switch (block.type) {
             case 'paragraph':
                 return (
-                    <p key={index} className="text-gray-300 leading-relaxed mb-6">
+                    <p key={index} className="text-gray-300 leading-relaxed mb-6 whitespace-pre-line">
                         {renderTextWithLinks(block.text)}
                     </p>
                 );
@@ -39,7 +55,7 @@ export default function NewsContentRenderer({ content }) {
                     ? 'font-display font-bold text-xl text-white mt-6 mb-3'
                     : 'font-display font-bold text-2xl text-white mt-8 mb-4';
                 return (
-                    <HeadingTag key={index} className={headingClass}>
+                    <HeadingTag key={index} id={block.id} className={headingClass}>
                         {block.text}
                     </HeadingTag>
                 );
@@ -88,7 +104,7 @@ export default function NewsContentRenderer({ content }) {
                 return (
                     <ul key={index} className="list-disc list-inside space-y-2 mb-6 text-gray-300">
                         {block.items?.map((item, i) => (
-                            <li key={i}>{item}</li>
+                            <li key={i}>{renderTextWithLinks(typeof item === 'string' ? item : item.text)}</li>
                         ))}
                     </ul>
                 );
@@ -103,6 +119,18 @@ export default function NewsContentRenderer({ content }) {
                     >
                         {block.text || block.url}
                     </a>
+                );
+            case 'details':
+                return (
+                    <details key={index} className="my-6 group bg-gray-800/50 rounded-lg overflow-hidden border border-gray-700">
+                        <summary className="flex items-center justify-between cursor-pointer p-4 font-bold text-white hover:bg-gray-700 transition">
+                            {renderTextWithLinks(block.summary)}
+                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                        </summary>
+                        <div className="p-4 border-t border-gray-700 text-gray-300 whitespace-pre-line">
+                            {renderTextWithLinks(block.content)}
+                        </div>
+                    </details>
                 );
             default:
                 return null;
