@@ -1215,7 +1215,7 @@ export default function NewsManager() {
                             </div>
 
                             {/* 分類 & 選項 */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-600 mb-2">{activeLang === 'zh' ? '文章分類' : 'Category'}</label>
                                     <select
@@ -1229,15 +1229,35 @@ export default function NewsManager() {
                                     </select>
                                 </div>
                                 <div className="flex items-end gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <input
                                             type="checkbox"
+                                            id="pinned"
                                             checked={formData.is_pinned}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, is_pinned: e.target.checked }))}
-                                            className="w-5 h-5 rounded"
+                                            onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
+                                            className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                                         />
-                                        <span className="text-sm font-bold text-gray-600">{activeLang === 'zh' ? '置頂' : 'Pinned'}</span>
-                                    </label>
+                                        <label htmlFor="pinned" className="text-gray-700 font-bold flex items-center gap-1 whitespace-nowrap">
+                                            <Pin size={16} /> 置頂文章 / Pinned
+                                        </label>
+
+                                        {formData.is_pinned && (
+                                            <div className="ml-0 md:ml-4 flex items-center gap-2 mt-2 md:mt-0">
+                                                <label htmlFor="pinned_order" className="text-sm text-gray-500 font-bold whitespace-nowrap">
+                                                    順序 / Order :
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    id="pinned_order"
+                                                    value={formData.pinned_order || 100}
+                                                    onChange={(e) => setFormData({ ...formData, pinned_order: parseInt(e.target.value) || 0 })}
+                                                    className="w-20 p-1 border border-gray-300 rounded text-center text-sm"
+                                                    min="1"
+                                                />
+                                                <span className="text-xs text-gray-400 whitespace-nowrap">(越小越前面 / Smaller is higher)</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -1421,14 +1441,10 @@ export default function NewsManager() {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Footer Removed - Actions moved to Header */}
                         </div>
                     </div>
                 </div>
             )}
-
-            {/* Preview Modal Removed - Using New Window */}
         </div>
     );
 }

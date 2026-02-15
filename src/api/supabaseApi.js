@@ -1301,9 +1301,10 @@ export const fetchNews = async ({ category, search, limit = 20 } = {}) => {
     try {
         let query = supabase
             .from('news')
-            .select('id, title, title_en, slug, category, cover_image, excerpt, excerpt_en, is_pinned, published_at')
+            .select('id, title, title_en, slug, category, cover_image, excerpt, excerpt_en, is_pinned, pinned_order, published_at')
             .eq('is_published', true)
             .order('is_pinned', { ascending: false })
+            .order('pinned_order', { ascending: true })
             .order('published_at', { ascending: false });
 
         if (category && category !== 'all') {
@@ -1402,6 +1403,7 @@ export const createNews = async (newsData) => {
             content: newsData.content || [],
             content_en: newsData.content_en || [],
             is_pinned: newsData.is_pinned || false,
+            pinned_order: newsData.pinned_order || 100, // Default to 100
             is_published: newsData.is_published || false,
             published_at: newsData.is_published ? new Date().toISOString() : null,
             author_id: user?.id || null
@@ -1438,6 +1440,7 @@ export const updateNews = async (id, newsData) => {
             content: newsData.content,
             content_en: newsData.content_en,
             is_pinned: newsData.is_pinned,
+            pinned_order: newsData.pinned_order,
             is_published: newsData.is_published
         };
 

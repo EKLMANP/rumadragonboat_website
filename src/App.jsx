@@ -19,6 +19,9 @@ import ProtectedRoute, {
 } from './components/ProtectedRoute';
 import { ROLES } from './contexts/AuthContext';
 
+// Google Analytics
+import GoogleAnalytics from './components/GoogleAnalytics';
+
 // ===== 公開頁面 (Lazy Loading) =====
 const HomePage = React.lazy(() => import('./pages/public/HomePage'));
 const LoginPage = React.lazy(() => import('./pages/public/LoginPage'));
@@ -52,11 +55,19 @@ const PlaceholderPage = ({ title }) => (
   </div>
 );
 
+// Google Analytics
+// import GoogleAnalytics from './components/GoogleAnalytics';
+
+// Google Tag Manager
+import GoogleTagManager from './components/GoogleTagManager';
+
 function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
         <Suspense fallback={<LoadingSpinner />}>
+          {/* <GoogleAnalytics /> */}
+          <GoogleTagManager />
           <Routes>
             {/* ===== 公開頁面 ===== */}
             <Route path="/" element={<HomePage />} />
