@@ -926,6 +926,7 @@ export default function NewsManager() {
         setLoading(true);
         const dataToSave = {
             ...formData,
+            pinned_order: (formData.pinned_order === '' || formData.pinned_order === null || formData.pinned_order === undefined) ? 100 : formData.pinned_order,
             is_published: publish
         };
 
@@ -1249,10 +1250,17 @@ export default function NewsManager() {
                                                 <input
                                                     type="number"
                                                     id="pinned_order"
-                                                    value={formData.pinned_order || 100}
-                                                    onChange={(e) => setFormData({ ...formData, pinned_order: parseInt(e.target.value) || 0 })}
-                                                    className="w-20 p-1 border border-gray-300 rounded text-center text-sm"
-                                                    min="1"
+                                                    value={formData.pinned_order ?? ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setFormData({
+                                                            ...formData,
+                                                            pinned_order: val === '' ? '' : parseInt(val)
+                                                        });
+                                                    }}
+                                                    placeholder="100"
+                                                    className="w-24 p-1 border border-gray-300 rounded text-center text-sm text-gray-900 bg-white"
+                                                    min="0"
                                                 />
                                                 <span className="text-xs text-gray-400 whitespace-nowrap">(越小越前面 / Smaller is higher)</span>
                                             </div>
