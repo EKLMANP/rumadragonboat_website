@@ -26,7 +26,7 @@ export default function NewsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 3; // 3x3 grid
+    const ITEMS_PER_PAGE = 6; // 3x2 grid
 
     // Debounce 搜尋
     useEffect(() => {
