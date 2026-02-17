@@ -73,6 +73,7 @@ export default function NewsPage() {
     const paginatedNews = regularNews.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
     const goToPage = (page) => {
+        const totalPages = Math.ceil(news.length / ITEMS_PER_PAGE);
         if (page >= 1 && page <= totalPages) {
             setCurrentPage(page);
             // Scroll to top of news section
@@ -163,30 +164,21 @@ export default function NewsPage() {
                         </div>
                     ) : (
                         <>
-                            {/* Pinned News */}
-                            {pinnedNews.length > 0 && (
-                                <div className="mb-12">
-                                    <h2 className="text-sm font-bold uppercase tracking-widest text-red-500 mb-6 flex items-center gap-2">
-                                        <Pin size={16} />
-                                        {lang === 'zh' ? '置頂消息' : 'PINNED'}
-                                    </h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {pinnedNews.map(item => (
-                                            <NewsCard key={item.id} item={item} lang={lang} formatDate={formatDate} isPinned />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Regular News */}
+                            {/* Unified News Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {paginatedNews.map(item => (
-                                    <NewsCard key={item.id} item={item} lang={lang} formatDate={formatDate} />
+                                {news.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(item => (
+                                    <NewsCard
+                                        key={item.id}
+                                        item={item}
+                                        lang={lang}
+                                        formatDate={formatDate}
+                                        isPinned={item.is_pinned}
+                                    />
                                 ))}
                             </div>
 
                             {/* Pagination Controls */}
-                            {totalPages > 1 && (
+                            {Math.ceil(news.length / ITEMS_PER_PAGE) > 1 && (
                                 <div className="flex items-center justify-center gap-4 mt-12">
                                     <button
                                         onClick={() => goToPage(currentPage - 1)}
@@ -201,7 +193,7 @@ export default function NewsPage() {
                                     </button>
 
                                     <div className="flex items-center gap-2">
-                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                        {Array.from({ length: Math.ceil(news.length / ITEMS_PER_PAGE) }, (_, i) => i + 1).map(page => (
                                             <button
                                                 key={page}
                                                 onClick={() => goToPage(page)}
@@ -217,8 +209,8 @@ export default function NewsPage() {
 
                                     <button
                                         onClick={() => goToPage(currentPage + 1)}
-                                        disabled={currentPage === totalPages}
-                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${currentPage === totalPages
+                                        disabled={currentPage === Math.ceil(news.length / ITEMS_PER_PAGE)}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${currentPage === Math.ceil(news.length / ITEMS_PER_PAGE)
                                             ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                             : 'bg-gray-800 text-white hover:bg-gray-700'
                                             }`}

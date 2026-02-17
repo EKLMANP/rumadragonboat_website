@@ -689,6 +689,7 @@ export default function NewsManager() {
             content: [],
             content_en: [],
             is_pinned: false,
+            pinned_order: 100,
             is_published: false
         };
 
@@ -704,6 +705,7 @@ export default function NewsManager() {
                 content: (news.content || []).map(b => ({ ...b, _id: b._id || generateId() })),
                 content_en: (news.content_en || []).map(b => ({ ...b, _id: b._id || generateId() })),
                 is_pinned: news.is_pinned || false,
+                pinned_order: news.pinned_order ?? 100,
                 is_published: news.is_published || false
             };
         } else {
