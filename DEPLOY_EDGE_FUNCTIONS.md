@@ -109,7 +109,7 @@ python3 ruma-creative-master/resources/upload_draft.py --article articles/dragon
 # 應收到最近草稿列表
 
 # 在 Telegram 傳送：發布 {news_id}
-# 應收到發布成功確認，文章應出現在 https://rumadragonboat.com/news/
+# 應收到發布成功確認，文章應出現在 https://uat.rumadragonboat.com/news/
 ```
 
 ---

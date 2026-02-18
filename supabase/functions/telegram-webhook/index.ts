@@ -3,6 +3,8 @@
 // 接收 Eric 的 Telegram 回覆，自動執行文章發布操作
 //
 // 支援指令：
+//   生成             → 隨機主題生成文章
+//   生成 {主題}      → 指定主題生成文章
 //   發布 {news_id}   → 將文章設為已發布
 //   修改 {news_id}   → 回覆已記錄（未來可擴充）
 //   狀態             → 列出最近 5 篇草稿
@@ -73,6 +75,14 @@ serve(async (req) => {
 
         // ── 5. Parse command ─────────────────────────────────────────────────
 
+        // 生成 / 生成 {主題}
+        const generateMatch = text.match(/^生成(?:\s+(.+))?$/);
+        if (generateMatch) {
+            const topic = generateMatch[1]?.trim() || "";
+            await handleGenerate(botToken, chatId, topic);
+            return new Response("ok", { status: 200 });
+        }
+
         // 發布 {id}
         const publishMatch = text.match(/^發布\s+([a-zA-Z0-9_-]+)/);
         if (publishMatch) {
@@ -110,12 +120,33 @@ serve(async (req) => {
         return new Response("ok", { status: 200 });
 
     } catch (e) {
-        console.error("telegram-webhook error:", e.message);
+        console.error("telegram-webhook error:", (e as Error).message);
         return new Response("ok", { status: 200 }); // Always return 200 to Telegram
     }
 });
 
 // ── Command handlers ──────────────────────────────────────────────────────────
+
+async function handleGenerate(
+    botToken: string,
+    chatId: number,
+    topic: string
+): Promise<void> {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const generateUrl = `${supabaseUrl.replace("/rest/v1", "")}/functions/v1/generate-article`;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Call generate-article function asynchronously (fire and forget)
+    // The generate-article function will send its own Telegram notification when done
+    fetch(generateUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify(topic ? { topic } : {}),
+    }).catch(err => console.error("generate-article call failed:", err));
+}
 
 async function handlePublish(
     supabase: ReturnType<typeof createClient>,
@@ -164,9 +195,9 @@ async function handlePublish(
 
     // Success!
     await sendTelegramMessage(botToken, chatId,
-        `🚀 *文章已正式發布！*\n\n` +
+        `🚀 *文章已正式發布（UAT）！*\n\n` +
         `📌 ${article.title}\n` +
-        `🔗 https://rumadragonboat.com/news/${article.slug}\n` +
+        `🔗 https://uat.rumadragonboat.com/news/${article.slug}\n` +
         `📊 GA 將從現在開始追蹤流量表現`
     );
 }
@@ -201,6 +232,13 @@ async function handleStatus(
 
 const HELP_TEXT = `
 *RUMA 文章審核 Bot 使用說明*
+
+✍️ *生成文章*
+\`生成\`
+→ 隨機選取主題，自動生成文章草稿
+
+\`生成 {主題}\`
+→ 指定主題生成文章（例：\`生成 龍舟訓練技巧\`）
 
 📤 *發布文章*
 \`發布 {文章ID}\`

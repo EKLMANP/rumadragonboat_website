@@ -1,0 +1,50 @@
+name: Weekly Article Generation
+
+on:
+  schedule:
+    # 每週五 UTC 00:00 = 台灣時間 (UTC+8) 08:00
+    - cron: '0 0 * * 5'
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: '指定文章主題（留空則隨機選取）'
+        required: false
+        default: ''
+
+jobs:
+  generate-article:
+    name: Generate Weekly Article
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger generate-article Edge Function
+        run: |
+          TOPIC="${{ github.event.inputs.topic }}"
+
+          if [ -n "$TOPIC" ]; then
+            BODY="{\"topic\": \"$TOPIC\"}"
+          else
+            BODY="{}"
+          fi
+
+          echo "Triggering article generation with body: $BODY"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "https://tmhlxhkzmssqnptmqzhy.supabase.co/functions/v1/generate-article" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -d "$BODY" \
+            --max-time 120)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY_RESPONSE=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY_RESPONSE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Article generation failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ Article generation triggered successfully"
