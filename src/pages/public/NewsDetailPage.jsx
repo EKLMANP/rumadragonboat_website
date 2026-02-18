@@ -2,11 +2,11 @@
 // RUMA 龍舟隊最新消息詳情頁
 
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { fetchNewsDetail } from '../../api/supabaseApi';
-import { ArrowLeft, Calendar, Tag, Pin, Loader2 } from 'lucide-react';
+import { fetchNewsDetail, fetchNewsPreview } from '../../api/supabaseApi';
+import { ArrowLeft, Calendar, Tag, Pin, Loader2, Eye } from 'lucide-react';
 import NewsContentRenderer from '../../components/NewsContentRenderer';
 
 const CATEGORIES = [
@@ -21,9 +21,15 @@ const CATEGORIES = [
 export default function NewsDetailPage() {
     const { slug } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { lang } = useLanguage();
     const [news, setNews] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // Preview mode: ?preview=true&token=xxx
+    const searchParams = new URLSearchParams(location.search);
+    const isPreview = searchParams.get('preview') === 'true';
+    const previewToken = searchParams.get('token') ?? '';
 
     useEffect(() => {
         loadNews();
@@ -31,9 +37,13 @@ export default function NewsDetailPage() {
 
     const loadNews = async () => {
         setLoading(true);
-        const data = await fetchNewsDetail(slug);
+        let data;
+        if (isPreview && previewToken) {
+            data = await fetchNewsPreview(slug, previewToken);
+        } else {
+            data = await fetchNewsDetail(slug);
+        }
         if (!data) {
-            // 文章不存在，導回列表頁
             navigate('/news');
             return;
         }
@@ -41,9 +51,9 @@ export default function NewsDetailPage() {
         setLoading(false);
     };
 
-    // 動態注入 Article Schema (SEO/AEO)
+    // 動態注入 Article Schema (SEO/AEO) — 草稿預覽模式下跳過
     useEffect(() => {
-        if (!news) return;
+        if (!news || isPreview) return;
 
         const articleSchema = {
             "@context": "https://schema.org",
@@ -128,6 +138,14 @@ export default function NewsDetailPage() {
     return (
         <div className="min-h-screen bg-[#0a0a0a] font-sans">
             <Navbar />
+
+            {/* 草稿預覽橫幅 */}
+            {isPreview && (
+                <div className="bg-yellow-500 text-black text-center py-2.5 px-4 font-bold text-sm flex items-center justify-center gap-2">
+                    <Eye size={16} />
+                    草稿預覽模式 — 此文章尚未正式發布，僅供審核使用
+                </div>
+            )}
 
             {/* Hero Banner */}
             <section className="relative h-[60vh] min-h-[400px] flex items-end overflow-hidden">

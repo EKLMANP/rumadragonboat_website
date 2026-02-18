@@ -1361,6 +1361,41 @@ export const fetchNewsDetail = async (slug) => {
 };
 
 /**
+ * 取得草稿文章預覽（透過 preview-article Edge Function）
+ * 需要有效的 HMAC preview token，不需要登入
+ * @param {string} slug - 文章 slug
+ * @param {string} token - HMAC-SHA256 preview token（前 32 字元）
+ */
+export const fetchNewsPreview = async (slug, token) => {
+    try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const url = `${supabaseUrl}/functions/v1/preview-article?slug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`;
+
+        const resp = await fetch(url, {
+            headers: {
+                'apikey': anonKey,
+                'Authorization': `Bearer ${anonKey}`,
+            },
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            console.error('Preview fetch failed:', resp.status, err);
+            return null;
+        }
+
+        const { data } = await resp.json();
+        return data || null;
+    } catch (error) {
+        console.error('Error fetching news preview:', error);
+        return null;
+    }
+};
+
+
+
+/**
  * 取得所有最新消息（後台管理用，含草稿）
  */
 export const fetchAllNews = async () => {
