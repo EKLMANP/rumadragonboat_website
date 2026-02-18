@@ -75,13 +75,25 @@ serve(async (req) => {
 
         // ── 5. Parse command ─────────────────────────────────────────────────
 
-        // 生成 / 生成 {主題}
-        const generateMatch = text.match(/^生成(?:\s+(.+))?$/);
-        if (generateMatch) {
-            const topic = generateMatch[1]?.trim() || "";
-            await handleGenerate(botToken, chatId, topic);
+        // 關鍵字研究 — 用 Gemini 做 SEO 研究，回傳 3 個建議主題
+        if (text === "關鍵字研究" || text === "seo" || text.toLowerCase() === "seo research") {
+            await handleSeoResearch(botToken, chatId);
             return new Response("ok", { status: 200 });
         }
+
+        // 生成 / 生成 {主題} / 生成 {主題1},{主題2},{主題3}
+        // 支援 User 的自然語言指令：「自動執行RUMA官網文章撰寫、發佈自動化流程」
+        const generateMatch = text.match(/^生成(?:\s+(.+))?$/) ||
+            text.includes("自動執行RUMA官網文章撰寫");
+
+        if (generateMatch) {
+            const topicStr = (Array.isArray(generateMatch) && generateMatch[1]) ? generateMatch[1].trim() : "";
+            // 支援逗號分隔多個主題：生成 主題1,主題2,主題3
+            const topics = topicStr ? topicStr.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [""];
+            await handleGenerateMultiple(botToken, chatId, topics);
+            return new Response("ok", { status: 200 });
+        }
+
 
         // 發布 {id}
         const publishMatch = text.match(/^發布\s+([a-zA-Z0-9_-]+)/);
@@ -127,25 +139,108 @@ serve(async (req) => {
 
 // ── Command handlers ──────────────────────────────────────────────────────────
 
-async function handleGenerate(
+async function handleSeoResearch(
+    botToken: string,
+    chatId: number
+): Promise<void> {
+    const geminiKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") ?? "";
+    if (!geminiKey) {
+        await sendTelegramMessage(botToken, chatId, "❌ GOOGLE_AI_STUDIO_API_KEY 未設定");
+        return;
+    }
+
+    await sendTelegramMessage(botToken, chatId,
+        `🔍 *正在進行 SEO 關鍵字研究...*\n\n請稍候約 15 秒，我會建護 3 個高流量主題。`
+    );
+
+    const prompt = `你是 RUMA Dragon Boat 龍舟隊的 SEO 專家。
+請分析目前台灣龍舟運動的搜尋趨勢，建護 3 個高流量、低競爭的文章主題。
+
+**要求：**
+- 適合台灣龍舟新手和進階選手
+- 具備 SEO 潛力（搜尋量高、競爭小）
+- 內容實用、可擴展為 1500-2000 字的文章
+
+**輸出格式（JSON）：**
+{
+  "topics": [
+    {
+      "title": "主題標題",
+      "main_keyword": "主關鍵字",
+      "reason": "為什麼這個主題有 SEO 潛力"
+    }
+  ]
+}`;
+
+    try {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.8, maxOutputTokens: 1024, responseMimeType: "application/json" },
+                }),
+            }
+        );
+
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const jsonText = rawText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+        const result = JSON.parse(jsonText);
+        const topics = result.topics ?? [];
+
+        if (topics.length === 0) throw new Error("No topics returned");
+
+        const topicLines = topics.map((t: { title: string; main_keyword: string; reason: string }, i: number) =>
+            `*${i + 1}. ${t.title}*\n🔑 關鍵字：${t.main_keyword}\n💡 ${t.reason}`
+        ).join("\n\n");
+
+        const topicList = topics.map((t: { title: string }) => t.title).join(",");
+
+        await sendTelegramMessage(botToken, chatId,
+            `📊 *SEO 關鍵字研究完成！*\n\n${topicLines}\n\n` +
+            `────────────────────\n` +
+            `🚀 *一鍵生成全部 3 篇：*\n` +
+            `\`生成 ${topicList}\``
+        );
+    } catch (err) {
+        await sendTelegramMessage(botToken, chatId,
+            `❌ SEO 研究失敗：${(err as Error).message}`
+        );
+    }
+}
+
+async function handleGenerateMultiple(
     botToken: string,
     chatId: number,
-    topic: string
+    topics: string[]
 ): Promise<void> {
+    const count = topics.length;
+    const topicDesc = topics.filter(Boolean).join("、") || "隨機主題";
+
+    await sendTelegramMessage(botToken, chatId,
+        `⏳ *正在生成 ${count} 篇文章...*\n\n📝 主題：${topicDesc}\n\n請稍候，每篇約 30 秒，共約 ${count * 30} 秒。`
+    );
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const generateUrl = `${supabaseUrl.replace("/rest/v1", "")}/functions/v1/generate-article`;
+    const generateUrl = `${supabaseUrl}/functions/v1/generate-article`;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    // Call generate-article function asynchronously (fire and forget)
-    // The generate-article function will send its own Telegram notification when done
-    fetch(generateUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify(topic ? { topic } : {}),
-    }).catch(err => console.error("generate-article call failed:", err));
+    for (const topic of topics) {
+        fetch(generateUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify(topic ? { topic } : {}),
+        }).catch(err => console.error("generate-article call failed:", err));
+
+        // Small delay between calls to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
 }
 
 async function handlePublish(
@@ -233,12 +328,19 @@ async function handleStatus(
 const HELP_TEXT = `
 *RUMA 文章審核 Bot 使用說明*
 
+🔍 *SEO 關鍵字研究*
+\`關鍵字研究\`
+→ 用 AI 分析搜尋趨勢，建護 3 個高流量主題
+
 ✍️ *生成文章*
 \`生成\`
-→ 隨機選取主題，自動生成文章草稿
+→ 隨機選取主題，自動生成 1 篇文章草稿
 
 \`生成 {主題}\`
-→ 指定主題生成文章（例：\`生成 龍舟訓練技巧\`）
+→ 指定主題生成 1 篇（例：\`生成 龍舟訓練技巧\`）
+
+\`生成 {主題1},{主題2},{主題3}\`
+→ 逗號分隔，一次生成多篇（例：\`生成 龍舟熱身,划槳技巧,比賽策略\`）
 
 📤 *發布文章*
 \`發布 {文章ID}\`
