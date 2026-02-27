@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { fetchVideos, postData, updateVideoOrder, updateVideo, deleteVideo } from '../../api/supabaseApi';
 import AppLayout from '../../components/AppLayout';
 import Swal from 'sweetalert2';
-import { Play, UploadCloud, ArrowUpDown, Save, X, ExternalLink, Move, Pencil, Trash2, Search } from 'lucide-react';
+import { Play, UploadCloud, ArrowUpDown, Save, X, ExternalLink, Move, Pencil, Trash2, Search, Film } from 'lucide-react';
 import {
     DndContext,
     closestCenter,
@@ -435,37 +435,39 @@ export default function VideosPage() {
         <AppLayout>
             <div className="max-w-7xl mx-auto space-y-6 pb-16">
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                            {lang === 'zh' ? '各式影片' : 'Videos'}
-                        </h1>
-                        <p className="text-sm text-gray-500">
-                            {lang === 'zh' ? '龍舟比賽、划船教學、活動花絮等各式影片' : 'Dragon boat races, tutorials, event highlights, and more.'}
-                        </p>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                        <button
-                            onClick={handleUploadClick}
-                            className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition shadow-sm"
-                        >
-                            <UploadCloud size={18} />
-                            {lang === 'zh' ? '上傳影片' : 'Upload Video'}
-                        </button>
-
-                        {/* Management Sort Button */}
-                        {isManager && !sortMode && (
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
+                                <Film className="text-sky-600" /> {lang === 'zh' ? '各式影片' : 'Videos'}
+                            </h1>
+                            <p className="text-gray-500 mt-1">
+                                {lang === 'zh' ? '龍舟比賽、划船教學、活動花絮等各式影片' : 'Dragon boat races, tutorials, event highlights, and more.'}
+                            </p>
+                        </div>
+                        <div className="flex gap-2 items-center">
                             <button
-                                onClick={() => {
-                                    setSortFilter('default'); // reset filter when sorting
-                                    setSortMode(true);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-lg transition shadow-sm"
+                                onClick={handleUploadClick}
+                                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition shadow-sm"
                             >
-                                <ArrowUpDown size={18} />
-                                {lang === 'zh' ? '調整影片順序' : 'Adjust Order'}
+                                <UploadCloud size={18} />
+                                {lang === 'zh' ? '上傳影片' : 'Upload Video'}
                             </button>
-                        )}
+
+                            {/* Management Sort Button */}
+                            {isManager && !sortMode && (
+                                <button
+                                    onClick={() => {
+                                        setSortFilter('default'); // reset filter when sorting
+                                        setSortMode(true);
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-lg transition shadow-sm"
+                                >
+                                    <ArrowUpDown size={18} />
+                                    {lang === 'zh' ? '調整影片順序' : 'Adjust Order'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
