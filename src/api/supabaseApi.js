@@ -221,13 +221,21 @@ export const fetchAttendance = async () => {
 /**
  * 取得活動列表
  */
-export const fetchActivities = async () => {
+export const fetchActivities = async (upcomingOnly = false) => {
     try {
+        let query = supabase
+            .from('activities')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (upcomingOnly) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            query = query.gte('date', yesterday.toISOString().split('T')[0]);
+        }
+
         const result = await withTimeout(
-            supabase
-                .from('activities')
-                .select('*')
-                .order('date', { ascending: false }),
+            query,
             20000,
             { data: [], error: null }
         );
@@ -246,13 +254,13 @@ export const fetchActivities = async () => {
 /**
  * 取得活動報名列表
  */
-export const fetchActivityRegistrations = async (userOnly = false) => {
+export const fetchActivityRegistrations = async (userOnly = false, upcomingOnly = false) => {
     try {
         let query = supabase
             .from('activity_registrations')
             .select(`
                 *,
-                activities (name, date, type, location, start_time)
+                activities!inner (name, date, type, location, start_time)
             `);
 
         // 如果 userOnly 為 true，僅撈當前使用者的報名紀錄
@@ -260,6 +268,12 @@ export const fetchActivityRegistrations = async (userOnly = false) => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return [];
             query = query.eq('user_id', user.id);
+        }
+
+        if (upcomingOnly) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            query = query.gte('activities.date', yesterday.toISOString().split('T')[0]);
         }
 
         const result = await withTimeout(

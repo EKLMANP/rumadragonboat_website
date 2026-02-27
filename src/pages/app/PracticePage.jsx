@@ -156,8 +156,8 @@ export default function PracticePage() {
         try {
             // 只載入核心活動資料
             const [acts, regs] = await Promise.all([
-                fetchActivities(),
-                fetchActivityRegistrations()
+                fetchActivities(true),
+                fetchActivityRegistrations(false, true)
             ]);
 
             setActivities(acts || []);
@@ -178,9 +178,16 @@ export default function PracticePage() {
                         .order('confirmed_date', { ascending: false })
                         .limit(10);
 
-                    const { data: practiceRegs } = await supabase
+                    const recentDates = dates ? dates.map(d => d.display_date) : [];
+                    let practiceRegsQuery = supabase
                         .from('practice_registrations')
                         .select('member_name, practice_date');
+
+                    if (recentDates.length > 0) {
+                        practiceRegsQuery = practiceRegsQuery.in('practice_date', recentDates);
+                    }
+
+                    const { data: practiceRegs } = await practiceRegsQuery;
 
                     if (members) {
                         setUsers(members.map(m => ({
