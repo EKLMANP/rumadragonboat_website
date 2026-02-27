@@ -272,7 +272,7 @@ export default function AnnouncementsNewsPage() {
 
                                 {/* Rank 4-5 */}
                                 {leaderboard.length > 3 && (
-                                    <div className="grid grid-cols-2 gap-4 px-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 px-2 sm:px-8">
                                         {leaderboard.slice(3).map((item, index) => (
                                             <div key={item.name} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
                                                 <span className="text-lg font-bold text-gray-400 w-8">{index + 4}</span>
@@ -297,7 +297,7 @@ export default function AnnouncementsNewsPage() {
                             <select
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                className="px-3 py-1.5 border border-gray-200 bg-white text-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                             >
                                 <option value="all">{lang === 'zh' ? '所有類別' : 'All Categories'}</option>
                                 {categories.slice(1).map(cat => (
@@ -314,7 +314,7 @@ export default function AnnouncementsNewsPage() {
                                 placeholder={lang === 'zh' ? '搜尋公告...' : 'Search announcements...'}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-200 bg-white text-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                             />
                         </div>
 
