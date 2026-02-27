@@ -18,7 +18,8 @@ import {
     LogOut,
     X,
     MessageSquareWarning,
-    Globe
+    Globe,
+    Film
 } from 'lucide-react';
 import BugReportModal from './BugReportModal';
 
@@ -32,9 +33,6 @@ export default function Sidebar({ isOpen, onToggle }) {
     // 直接從 userRoles 陣列計算權限，避免派生狀態延遲
     const computedIsAdmin = Array.isArray(userRoles) && userRoles.includes('admin');
     const computedIsManagement = computedIsAdmin || (Array.isArray(userRoles) && userRoles.includes('management'));
-
-    // Debug: 輸出角色資訊
-    console.log('[Sidebar] userRoles:', userRoles, 'isAdmin:', computedIsAdmin, 'isManagement:', computedIsManagement);
 
     // 取得使用者名稱
     const displayName = userProfile?.name || '隊員';
@@ -78,7 +76,14 @@ export default function Sidebar({ isOpen, onToggle }) {
             label: lang === 'zh' ? '活動報名' : 'Event registration',
             visible: true
         },
-        // ===== 5. 我的龍舟旅程 =====
+        // ===== 5. 各式影片 =====
+        {
+            path: '/app/videos',
+            icon: Film,
+            label: lang === 'zh' ? '各式影片' : 'Videos',
+            visible: true
+        },
+        // ===== 6. 我的龍舟旅程 =====
         {
             path: '/app/journey',
             icon: MapPin,

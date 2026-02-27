@@ -37,6 +37,7 @@ const ProfilePage = React.lazy(() => import('./pages/app/ProfilePage'));
 const AnnouncementsNewsPage = React.lazy(() => import('./pages/app/AnnouncementsNewsPage'));
 const CalendarPage = React.lazy(() => import('./pages/app/CalendarPage'));
 const MyJourneyPage = React.lazy(() => import('./pages/app/MyJourneyPage'));
+const VideosPage = React.lazy(() => import('./pages/app/VideosPage'));
 
 // ===== 舊有頁面 (Lazy Loading) =====
 const CoachPage = React.lazy(() => import('./pages/CoachPage'));
@@ -107,6 +108,16 @@ function App() {
               element={
                 <MemberRoute>
                   <PracticePage />
+                </MemberRoute>
+              }
+            />
+
+            {/* 各式影片（會員） */}
+            <Route
+              path="/app/videos"
+              element={
+                <MemberRoute>
+                  <VideosPage />
                 </MemberRoute>
               }
             />

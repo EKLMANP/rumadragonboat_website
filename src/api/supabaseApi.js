@@ -306,6 +306,104 @@ export const fetchAnnouncements = async () => {
 };
 
 // =====================================================
+// 影片管理 (Videos)
+// =====================================================
+
+/**
+ * 取得各式影片列表 (輕量查詢，不需 timeout wrapper)
+ */
+export const fetchVideos = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('videos')
+            .select('*')
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching videos:", error);
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.error("Error fetching videos:", error);
+        return [];
+    }
+};
+
+/**
+ * 新增影片
+ */
+const createVideo = async (params) => {
+    const { error } = await supabase
+        .from('videos')
+        .insert({
+            title: params.title,
+            category: params.category,
+            url: params.url,
+            sort_order: 0 // 新影片預設在最上面
+        });
+
+    if (error) {
+        return { success: false, message: error.message };
+    }
+    return { success: true };
+};
+
+/**
+ * 更新多個影片的排序
+ */
+export const updateVideoOrder = async (updates) => {
+    // updates should be an array of { id, sort_order }
+    // Supabase JS doesn't have a direct upsert for bulk without full rows easily,
+    // but we can loop or use a custom RPC. For simplicity and small numbers, we can loop updating.
+    try {
+        const promises = updates.map(update =>
+            supabase
+                .from('videos')
+                .update({ sort_order: update.sort_order })
+                .eq('id', update.id)
+        );
+
+        await Promise.all(promises);
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating video order:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 更新單一影片資料
+ */
+export const updateVideo = async (id, updates) => {
+    const { error } = await supabase
+        .from('videos')
+        .update(updates)
+        .eq('id', id);
+
+    if (error) {
+        return { success: false, message: error.message };
+    }
+    return { success: true };
+};
+
+/**
+ * 刪除影片
+ */
+export const deleteVideo = async (id) => {
+    const { error } = await supabase
+        .from('videos')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        return { success: false, message: error.message };
+    }
+    return { success: true };
+};
+
+// =====================================================
 // 寫入資料 (POST 操作)
 // =====================================================
 
@@ -361,6 +459,13 @@ export const postData = async (action, params) => {
 
             case 'deleteUser':
                 return await deleteMember(params.Name);
+
+            // === 影片管理 ===
+            case 'addVideo':
+                return await createVideo(params);
+
+            case 'updateVideoOrder':
+                return await updateVideoOrder(params.updates);
 
             // === 裝備管理 ===
             case 'updateEquipment':
