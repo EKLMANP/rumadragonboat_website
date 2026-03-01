@@ -275,6 +275,16 @@ const CoachPage = () => {
   const [activityRegistrations, setActivityRegistrations] = useState([]); // New state for raw activity regs
   const [adminMembers, setAdminMembers] = useState([]);
 
+  // --- 船練點名 分頁 State ---
+  const [rollCallPage, setRollCallPage] = useState(1);
+  const [rollCallItemsPerPage, setRollCallItemsPerPage] = useState(window.innerWidth < 768 ? 5 : 6);
+
+  useEffect(() => {
+    const handleResize = () => setRollCallItemsPerPage(window.innerWidth < 768 ? 5 : 6);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- 活動管理篩選與分頁 State ---
   const [createdActivityFilter, setCreatedActivityFilter] = useState('all');
   const [createdPage, setCreatedPage] = useState(1);
@@ -2044,27 +2054,77 @@ const CoachPage = () => {
                       {lang === 'zh' ? '目前沒有任何練習場次，請先至「日期管理」新增。' : 'No practice sessions available. Add one in "Activities".'}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {dbDates.map((item) => (
-                        <div key={item.date}
-                          onClick={() => openRollCall(item.date)}
-                          className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-green-400 transition-all flex flex-col gap-3 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                            <ClipboardList size={48} className="text-green-500" />
+                    (() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const validRollCallDates = dbDates.filter(item => {
+                        const dateStr = item.date.split('(')[0];
+                        const [year, month, day] = dateStr.split('/');
+                        const itemDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                        itemDate.setHours(0, 0, 0, 0);
+                        return itemDate >= today;
+                      });
+
+                      const totalPages = Math.ceil(validRollCallDates.length / rollCallItemsPerPage);
+                      const startIndex = (rollCallPage - 1) * rollCallItemsPerPage;
+                      const paginatedDates = validRollCallDates.slice(startIndex, startIndex + rollCallItemsPerPage);
+
+                      if (validRollCallDates.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-gray-400 border-2 border-dashed rounded-lg">
+                            {lang === 'zh' ? '目前沒有即將到來的練習場次。' : 'No upcoming practice sessions available.'}
                           </div>
-                          <div className="flex items-center gap-2 text-green-700 font-bold text-lg">
-                            <Calendar size={20} /> {item.date.split('(')[0]}
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {paginatedDates.map((item) => (
+                              <div key={item.date}
+                                onClick={() => openRollCall(item.date)}
+                                className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-green-400 transition-all flex flex-col gap-3 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition">
+                                  <ClipboardList size={48} className="text-green-500" />
+                                </div>
+                                <div className="flex items-center gap-2 text-green-700 font-bold text-lg">
+                                  <Calendar size={20} /> {item.date.split('(')[0]}
+                                </div>
+                                <div className="flex flex-col gap-1 text-sm text-gray-600">
+                                  <span className="flex items-center gap-1"><Clock size={14} /> {item.time}</span>
+                                  <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
+                                </div>
+                                <button className="mt-2 w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg group-hover:bg-green-600 group-hover:text-white transition">
+                                  {lang === 'zh' ? '開始點名' : 'Start Roll Call'}
+                                </button>
+                              </div>
+                            ))}
                           </div>
-                          <div className="flex flex-col gap-1 text-sm text-gray-600">
-                            <span className="flex items-center gap-1"><Clock size={14} /> {item.time}</span>
-                            <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
-                          </div>
-                          <button className="mt-2 w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg group-hover:bg-green-600 group-hover:text-white transition">
-                            {lang === 'zh' ? '開始點名' : 'Start Roll Call'}
-                          </button>
+
+                          {totalPages > 1 && (
+                            <div className="flex justify-center items-center mt-6 gap-4">
+                              <button
+                                onClick={() => setRollCallPage(p => Math.max(1, p - 1))}
+                                disabled={rollCallPage === 1}
+                                className="p-2 border rounded-full hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                              >
+                                <ChevronLeft size={20} className="text-gray-600" />
+                              </button>
+                              <span className="text-gray-600 font-medium">
+                                {lang === 'zh' ? `第 ${rollCallPage} 頁` : `Page ${rollCallPage}`} / {totalPages}
+                              </span>
+                              <button
+                                onClick={() => setRollCallPage(p => Math.min(totalPages, p + 1))}
+                                disabled={rollCallPage === totalPages}
+                                className="p-2 border rounded-full hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                              >
+                                <ChevronRight size={20} className="text-gray-600" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
 
