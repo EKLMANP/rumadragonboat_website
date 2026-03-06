@@ -1,9 +1,8 @@
 name: Weekly Article Generation
 
 on:
-  schedule:
-    # 每週五 UTC 00:00 = 台灣時間 (UTC+8) 08:00
-    - cron: '0 0 * * 5'
+  # schedule:  ← 啟用時取消此區塊註解，並在 Supabase 設定新的 TELEGRAM_BOT_TOKEN
+  #   - cron: '0 0 * * 5'  # 每週五 UTC 00:00 = 台灣時間 08:00
   workflow_dispatch:
     inputs:
       topics:
