@@ -98,24 +98,34 @@ export default function PracticePage() {
                 return;
             }
 
-            // 4. Get member details via public.users → members.email lookup
-            // (members.user_id backfill may be incomplete, so we resolve by email)
-            const userIds = regs.map(r => r.user_id).filter(Boolean);
-            const { data: userProfiles } = await supabase
-                .from('users')
-                .select('id, email')
-                .in('id', userIds);
-            const emails = (userProfiles || []).map(u => u.email).filter(Boolean);
-            const { data: memberData } = emails.length > 0
-                ? await supabase.from('members').select('name, weight, position, skill_rating').in('email', emails)
+            // 4. Use admin_list_users_with_roles RPC (same as CoachPage)
+            // This joins auth.users → members by email inside a SECURITY DEFINER function
+            // Bypasses public.users sync issues and email case-sensitivity problems
+            const userIds = new Set(regs.map(r => r.user_id).filter(Boolean));
+            const { data: allUsers } = await supabase.rpc('admin_list_users_with_roles');
+            const registeredUsers = (allUsers || []).filter(u => userIds.has(u.user_id));
+
+            // Get weight/position/skill from members table for matched emails
+            const matchedEmails = registeredUsers.map(u => u.email).filter(Boolean);
+            const { data: memberDetails } = matchedEmails.length > 0
+                ? await supabase.from('members')
+                    .select('email, weight, position, skill_rating')
+                    .in('email', matchedEmails)
                 : { data: [] };
 
-            const participants = (memberData || []).map(m => ({
-                Name: m.name,
-                Weight: m.weight || 0,
-                Position: m.position || '左右',
-                Skill_Rating: m.skill_rating || 1,
-            }));
+            // Build a lookup map: email → member details
+            const detailMap = {};
+            (memberDetails || []).forEach(m => { detailMap[m.email] = m; });
+
+            const participants = registeredUsers.map(u => {
+                const detail = detailMap[u.email] || {};
+                return {
+                    Name: u.member_name || u.email,
+                    Weight: detail.weight || 0,
+                    Position: detail.position || '左右',
+                    Skill_Rating: detail.skill_rating || 1,
+                };
+            });
 
             setSeatingData(generateSeating(participants));
         } catch (error) {
