@@ -70,8 +70,15 @@ export default function PracticePage() {
                 .maybeSingle();
 
             if (savedData?.boat_data) {
-                setSeatingData(savedData.boat_data);
-                return;
+                // Validate saved data actually has paddlers - skip stale empty records
+                const bd = savedData.boat_data;
+                const hasLeftPaddlers = Array.isArray(bd.left) && bd.left.some(p => p !== null);
+                const hasRightPaddlers = Array.isArray(bd.right) && bd.right.some(p => p !== null);
+                if (hasLeftPaddlers || hasRightPaddlers) {
+                    setSeatingData(bd);
+                    return;
+                }
+                // If saved data is empty (no paddlers), fall through to auto-generate from registrations
             }
 
             // 2. Find the activity for this date
