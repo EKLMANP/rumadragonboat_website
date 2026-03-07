@@ -21,7 +21,7 @@ export const generateSeating = (users) => {
   };
   let reserve = [];
 
-  if (!users || users.length === 0) return { boat, reserve };
+  if (!users || users.length === 0) return { ...boat, reserve };
 
   // 1. 資料預處理
   let pool = users.map(u => ({

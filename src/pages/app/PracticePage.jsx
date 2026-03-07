@@ -60,64 +60,67 @@ export default function PracticePage() {
     const loadSeatingForDate = async (date) => {
         setSeatingLoading(true);
         try {
+            const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
+
             // 1. Try to fetch saved arrangement
-            const { data: savedData, error } = await supabase
+            const { data: savedData } = await supabase
                 .from('seating_arrangements')
                 .select('boat_data')
-                .eq('practice_date', date.split('(')[0].replace(/\//g, '-').trim()) // Standardize date
+                .eq('practice_date', cleanDate)
                 .maybeSingle();
 
             if (savedData?.boat_data) {
-                console.log('Using saved seating chart');
                 setSeatingData(savedData.boat_data);
-            } else {
-                // 2. Fallback: Generate from registrations
-                console.log('Generating preview seating chart');
-
-                // Find registrations for this date
-                // Need to match date format. The `registrations` state has `practicedates` which might need normalization
-                // `registrations` state comes from `fetchActivityRegistrations` which has:
-                // { name: ..., practice_date: ..., activity: { date: ... } }
-
-                // We need the raw registrations with user info to generate seating
-                // `allRegs` (from loadData) has { name, practicedates }
-                // But `generateSeating` needs full user objects (weight, skill, side)
-
-                // Filter registrations for this date
-                const targetDateRegs = registrations.filter(r => {
-                    // Check against activity date
-                    if (r.activities?.date) {
-                        const actDate = r.activities.date.replace(/-/g, '/'); // 2026/02/15
-                        const target = date.split('(')[0].replace(/-/g, '/'); // 2026/02/15
-                        return actDate === target;
-                    }
-                    return false;
-                });
-
-                // Map to full user objects from `users` state
-                const participants = targetDateRegs.map(r => {
-                    // Try to match by user_id first, then by name
-                    const user = users.find(u =>
-                        (r.user_id && u.id === r.user_id) ||
-                        (u.Name === (r.users?.name || r.name))
-                    );
-
-                    if (user) return user;
-
-                    // Fallback for unknown users
-                    return {
-                        Name: r.users?.name || r.name || 'Unknown',
-                        Weight: 0,
-                        Position: '左右',
-                        Skill_Rating: 1
-                    };
-                });
-
-                const generated = generateSeating(participants);
-                setSeatingData(generated);
+                return;
             }
+
+            // 2. Find the activity for this date
+            const { data: activity } = await supabase
+                .from('activities')
+                .select('id')
+                .eq('date', cleanDate)
+                .eq('type', 'boat_practice')
+                .maybeSingle();
+
+            if (!activity?.id) {
+                setSeatingData(generateSeating([]));
+                return;
+            }
+
+            // 3. Get all registrations for this activity
+            const { data: regs } = await supabase
+                .from('activity_registrations')
+                .select('user_id')
+                .eq('activity_id', activity.id);
+
+            if (!regs || regs.length === 0) {
+                setSeatingData(generateSeating([]));
+                return;
+            }
+
+            // 4. Get member details via public.users → members.email lookup
+            // (members.user_id backfill may be incomplete, so we resolve by email)
+            const userIds = regs.map(r => r.user_id).filter(Boolean);
+            const { data: userProfiles } = await supabase
+                .from('users')
+                .select('id, email')
+                .in('id', userIds);
+            const emails = (userProfiles || []).map(u => u.email).filter(Boolean);
+            const { data: memberData } = emails.length > 0
+                ? await supabase.from('members').select('name, weight, position, skill_rating').in('email', emails)
+                : { data: [] };
+
+            const participants = (memberData || []).map(m => ({
+                Name: m.name,
+                Weight: m.weight || 0,
+                Position: m.position || '左右',
+                Skill_Rating: m.skill_rating || 1,
+            }));
+
+            setSeatingData(generateSeating(participants));
         } catch (error) {
             console.error("Error loading seating:", error);
+            setSeatingData(generateSeating([]));
         } finally {
             setSeatingLoading(false);
         }
@@ -238,11 +241,6 @@ export default function PracticePage() {
                     if (newSeatingDates.length > 0 && !seatingDate) {
                         // Find closest upcoming date or just the first one
                         setSeatingDate(newSeatingDates[0]);
-                    }
-
-                    if (allSeatingDates.length > 0) {
-                        const seatingData = await fetchSeatingArrangements(allSeatingDates);
-                        setSeatingCharts(seatingData || {});
                     }
 
                 } catch (e) {
