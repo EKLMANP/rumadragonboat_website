@@ -75,6 +75,48 @@ export default function PracticePage() {
                 const hasLeftPaddlers = Array.isArray(bd.left) && bd.left.some(p => p !== null);
                 const hasRightPaddlers = Array.isArray(bd.right) && bd.right.some(p => p !== null);
                 if (hasLeftPaddlers || hasRightPaddlers) {
+                    // Post-process: resolve any email-as-Name entries to proper member names
+                    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    const allPaddlers = [
+                        ...(bd.left || []),
+                        ...(bd.right || []),
+                        ...(bd.reserve || []),
+                        bd.steer, bd.drummer
+                    ].filter(Boolean);
+                    const emailNames = allPaddlers
+                        .map(p => p.Name || p.name)
+                        .filter(n => n && emailPattern.test(n));
+
+                    if (emailNames.length > 0) {
+                        // Fetch member names by email (case-insensitive)
+                        const { data: memberLookup } = await supabase
+                            .from('members')
+                            .select('name, email');
+                        const emailToName = {};
+                        (memberLookup || []).forEach(m => {
+                            if (m.email) emailToName[m.email.toLowerCase()] = m.name;
+                        });
+
+                        // Replace email names with proper names
+                        const fixName = (paddler) => {
+                            if (!paddler) return paddler;
+                            const pName = paddler.Name || paddler.name;
+                            if (pName && emailPattern.test(pName)) {
+                                const resolved = emailToName[pName.toLowerCase()];
+                                if (resolved) {
+                                    return { ...paddler, Name: resolved, name: resolved };
+                                }
+                            }
+                            return paddler;
+                        };
+
+                        if (bd.left) bd.left = bd.left.map(fixName);
+                        if (bd.right) bd.right = bd.right.map(fixName);
+                        if (bd.reserve) bd.reserve = bd.reserve.map(fixName);
+                        if (bd.steer) bd.steer = fixName(bd.steer);
+                        if (bd.drummer) bd.drummer = fixName(bd.drummer);
+                    }
+
                     setSeatingData(bd);
                     return;
                 }
@@ -112,22 +154,24 @@ export default function PracticePage() {
             const { data: allUsers } = await supabase.rpc('admin_list_users_with_roles');
             const registeredUsers = (allUsers || []).filter(u => userIds.has(u.user_id));
 
-            // Get weight/position/skill from members table for matched emails
+            // Get weight/position/skill/name from members table for matched emails
             const matchedEmails = registeredUsers.map(u => u.email).filter(Boolean);
+            // Use case-insensitive matching: fetch all members and filter manually
             const { data: memberDetails } = matchedEmails.length > 0
                 ? await supabase.from('members')
-                    .select('email, weight, position, skill_rating')
-                    .in('email', matchedEmails)
+                    .select('name, email, weight, position, skill_rating')
                 : { data: [] };
 
-            // Build a lookup map: email → member details
+            // Build a lookup map: lowercase email → member details (case-insensitive)
             const detailMap = {};
-            (memberDetails || []).forEach(m => { detailMap[m.email] = m; });
+            (memberDetails || []).forEach(m => {
+                if (m.email) detailMap[m.email.toLowerCase()] = m;
+            });
 
             const participants = registeredUsers.map(u => {
-                const detail = detailMap[u.email] || {};
+                const detail = detailMap[(u.email || '').toLowerCase()] || {};
                 return {
-                    Name: u.member_name || u.email,
+                    Name: u.member_name || detail.name || u.email,
                     Weight: detail.weight || 0,
                     Position: detail.position || '左右',
                     Skill_Rating: detail.skill_rating || 1,

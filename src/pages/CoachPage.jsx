@@ -462,10 +462,23 @@ const CoachPage = () => {
 
       setRawAttendanceHistory(attData || []);
 
-      // 構建報名名單 (需依賴 adminMembersList)
+      // Build email-to-name lookup from members table (case-insensitive)
+      const emailToMemberName = {};
+      try {
+        const { data: membersForLookup } = await import('../lib/supabase').then(m =>
+          m.supabase.from('members').select('name, email')
+        );
+        (membersForLookup || []).forEach(m => {
+          if (m.email && m.name) emailToMemberName[m.email.toLowerCase()] = m.name;
+        });
+      } catch (e) { /* ignore */ }
+
+      // 構建報名名單 (需依賴 adminMembersList + members fallback)
       const newRegsMapped = (actRegsData || []).map(r => {
         const userInfo = adminMembersList.find(u => u.id === r.user_id);
-        const resolvedName = userInfo?.memberName || userInfo?.email || r.users?.name || r.name || 'Unknown';
+        // If memberName is missing, try to resolve from members table by email
+        const memberFallbackName = userInfo?.email ? emailToMemberName[userInfo.email.toLowerCase()] : null;
+        const resolvedName = userInfo?.memberName || memberFallbackName || r.users?.name || r.name || 'Unknown';
 
         return {
           name: resolvedName,
@@ -1376,10 +1389,12 @@ const CoachPage = () => {
                                       const registrationList = activityRegistrations
                                         .filter(r => r.activity_id === activity.id)
                                         .map((r, idx) => {
-                                          const userInfo = adminMembers.find(u => u.id === r.user_id);
-                                          return {
+                                            const userInfo = adminMembers.find(u => u.id === r.user_id);
+                                            // Fallback: look up name from members table (allUsers) by email
+                                            const memberFallback = userInfo?.email ? allUsers.find(u => u.Email && u.Email.toLowerCase() === userInfo.email.toLowerCase()) : null;
+                                            return {
                                             regNo: `REG-${activity.id.toString().slice(0, 4).toUpperCase()}-${String(idx + 1).padStart(3, '0')}`,
-                                            name: userInfo?.memberName || userInfo?.email || r.users?.name || 'Unknown',
+                                            name: userInfo?.memberName || memberFallback?.Name || userInfo?.email || r.users?.name || 'Unknown',
                                             email: userInfo?.email || r.users?.email || '-'
                                           };
                                         });
