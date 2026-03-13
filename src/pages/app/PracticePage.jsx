@@ -147,36 +147,21 @@ export default function PracticePage() {
                 return;
             }
 
-            // 4. Use admin_list_users_with_roles RPC (same as CoachPage)
-            // This joins auth.users → members by email inside a SECURITY DEFINER function
-            // Bypasses public.users sync issues and email case-sensitivity problems
-            const userIds = new Set(regs.map(r => r.user_id).filter(Boolean));
-            const { data: allUsers } = await supabase.rpc('admin_list_users_with_roles');
-            const registeredUsers = (allUsers || []).filter(u => userIds.has(u.user_id));
-
-            // Get weight/position/skill/name from members table for matched emails
-            const matchedEmails = registeredUsers.map(u => u.email).filter(Boolean);
-            // Use case-insensitive matching: fetch all members and filter manually
-            const { data: memberDetails } = matchedEmails.length > 0
+            // 4. Get participant details directly from members table (lightweight)
+            // members table already has user_id linked to auth.users — no need for heavy admin RPC
+            const userIds = regs.map(r => r.user_id).filter(Boolean);
+            const { data: memberDetails } = userIds.length > 0
                 ? await supabase.from('members')
-                    .select('name, email, weight, position, skill_rating')
+                    .select('name, email, weight, position, skill_rating, user_id')
+                    .in('user_id', userIds)
                 : { data: [] };
 
-            // Build a lookup map: lowercase email → member details (case-insensitive)
-            const detailMap = {};
-            (memberDetails || []).forEach(m => {
-                if (m.email) detailMap[m.email.toLowerCase()] = m;
-            });
-
-            const participants = registeredUsers.map(u => {
-                const detail = detailMap[(u.email || '').toLowerCase()] || {};
-                return {
-                    Name: u.member_name || detail.name || u.email,
-                    Weight: detail.weight || 0,
-                    Position: detail.position || '左右',
-                    Skill_Rating: detail.skill_rating || 1,
-                };
-            });
+            const participants = (memberDetails || []).map(m => ({
+                Name: m.name || m.email || 'Unknown',
+                Weight: m.weight || 0,
+                Position: m.position || '左右',
+                Skill_Rating: m.skill_rating || 1,
+            }));
 
             setSeatingData(generateSeating(participants));
         } catch (error) {

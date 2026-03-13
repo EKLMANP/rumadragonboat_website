@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
  * @param {number} ms - 超時毫秒數
  * @param {*} fallback - 超時時的回傳值
  */
-const withTimeout = async (promise, ms = 20000, fallback = null) => {
+const withTimeout = async (promise, ms = 8000, fallback = null) => {
     let timeoutId;
     const timeoutPromise = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
@@ -136,7 +136,7 @@ export const fetchMemberBasicInfo = async () => {
                 .from('members')
                 .select('name, avatar_url')
                 .order('name'),
-            20000,
+            5000,
             { data: [], error: null }
         );
 
@@ -199,7 +199,7 @@ export const fetchAttendance = async () => {
     try {
         const result = await withTimeout(
             supabase.from('attendance').select('*'),
-            20000,
+            6000,
             { data: [], error: null }
         );
 
@@ -236,7 +236,7 @@ export const fetchActivities = async (upcomingOnly = false) => {
 
         const result = await withTimeout(
             query,
-            20000,
+            5000,
             { data: [], error: null }
         );
 
@@ -278,7 +278,7 @@ export const fetchActivityRegistrations = async (userOnly = false, upcomingOnly 
 
         const result = await withTimeout(
             query,
-            20000,
+            6000,
             { data: [], error: null }
         );
 
@@ -304,7 +304,7 @@ export const fetchAnnouncements = async () => {
                 .select('*')
                 .order('pinned', { ascending: false })
                 .order('created_at', { ascending: false }),
-            20000,
+            5000,
             { data: [], error: null }
         );
 

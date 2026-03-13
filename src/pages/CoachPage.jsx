@@ -462,16 +462,11 @@ const CoachPage = () => {
 
       setRawAttendanceHistory(attData || []);
 
-      // Build email-to-name lookup from members table (case-insensitive)
+      // Build email-to-name lookup from already-fetched membersData (no extra query needed)
       const emailToMemberName = {};
-      try {
-        const { data: membersForLookup } = await import('../lib/supabase').then(m =>
-          m.supabase.from('members').select('name, email')
-        );
-        (membersForLookup || []).forEach(m => {
-          if (m.email && m.name) emailToMemberName[m.email.toLowerCase()] = m.name;
-        });
-      } catch (e) { /* ignore */ }
+      (membersData || []).forEach(m => {
+        if (m.email && m.name) emailToMemberName[m.email.toLowerCase()] = m.name;
+      });
 
       // 構建報名名單 (需依賴 adminMembersList + members fallback)
       const newRegsMapped = (actRegsData || []).map(r => {

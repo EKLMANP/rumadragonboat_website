@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import AppLayout from '../../components/AppLayout';
-import { supabase } from '../../lib/supabase';
 import { fetchActivities, fetchAttendance, fetchUserPoints } from '../../api/supabaseApi';
 
 export default function DashboardPage() {
@@ -18,13 +17,19 @@ export default function DashboardPage() {
     const [upcomingActivities, setUpcomingActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // 載入資料
+    // 載入所有資料 — 單一 useEffect，平行化所有 API 呼叫
     useEffect(() => {
-        const loadData = async () => {
+        const loadAll = async () => {
             setLoading(true);
             try {
-                // 1. 載入活動 (近期活動)
-                const activities = await fetchActivities();
+                // 平行載入所有資料 (取代兩個分開的 useEffect + 減少重複呼叫)
+                const [activities, pointsResult, allAttendance] = await Promise.all([
+                    fetchActivities(),          // 呼叫一次，同時用於近期活動 + 統計計算
+                    fetchUserPoints(),           // M 點
+                    fetchAttendance(),           // 出席紀錄 (用於排名 + 連續出席)
+                ]);
+
+                // === 近期活動 ===
                 const now = new Date();
                 const upcoming = (activities || [])
                     .filter(a => new Date(a.date) >= now)
@@ -38,116 +43,63 @@ export default function DashboardPage() {
                     }));
                 setUpcomingActivities(upcoming);
 
+                // === 統計數據 (需要 userProfile) ===
+                if (userProfile?.email && userProfile?.name) {
+                    // 直接使用 userProfile.name，不需要額外查 members 表
+                    const targetName = userProfile.name;
+                    const currentYear = now.getFullYear();
+                    const currentMonth = now.getMonth() + 1;
+
+                    // (A) 本月練習次數
+                    const myRecords = (allAttendance || []).filter(r => r.Name === targetName);
+                    const monthlyCount = myRecords.filter(r => {
+                        const d = new Date(r.Date.replace(/\//g, '-'));
+                        return d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth;
+                    }).length;
+
+                    // (B) 本月排名
+                    const boardMap = {};
+                    (allAttendance || []).forEach(r => {
+                        const d = new Date(r.Date.replace(/\//g, '-'));
+                        if (d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth) {
+                            boardMap[r.Name] = (boardMap[r.Name] || 0) + 1;
+                        }
+                    });
+                    const sortedBoard = Object.entries(boardMap)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([name, count]) => ({ name, count }));
+                    const myRankIndex = sortedBoard.findIndex(item => item.name === targetName);
+                    const myRank = (myRankIndex !== -1 && monthlyCount > 0) ? myRankIndex + 1 : '-';
+
+                    // (C) 連續出席
+                    const pastPractices = (activities || [])
+                        .filter(a => a.type === 'boat_practice' && new Date(a.date) < now)
+                        .map(a => a.date.split('(')[0].replace(/\//g, '-'))
+                        .sort((a, b) => new Date(b) - new Date(a));
+                    const myAttendedDates = new Set(myRecords.map(r => r.Date.split('(')[0].replace(/\//g, '-')));
+                    let streak = 0;
+                    for (const practiceDate of pastPractices) {
+                        if (myAttendedDates.has(practiceDate)) { streak++; } else { break; }
+                    }
+
+                    setStats({
+                        totalPoints: pointsResult?.totalPoints || 0,
+                        monthlyPractices: monthlyCount,
+                        currentStreak: streak,
+                        rank: myRank,
+                        totalPractices: myRecords.length
+                    });
+                } else {
+                    setStats(prev => ({ ...prev, totalPoints: pointsResult?.totalPoints || 0 }));
+                }
             } catch (error) {
-                console.error('Load error:', error);
+                console.error('Dashboard load error:', error);
             } finally {
                 setLoading(false);
             }
         };
-        loadData();
-    }, [lang]);
-
-    // 計算 User 統計數據 (同步 MyJourney 與 CoachPage 邏輯)
-    useEffect(() => {
-        const calculateStats = async () => {
-            if (!userProfile?.email || !userProfile?.name) return;
-
-            try {
-                // 1. 取得 M 點 (同步 My Journey)
-                const { totalPoints } = await fetchUserPoints();
-
-                // 2. 取得出席紀錄 & 活動 (用於計算本月練習、排名、連續出席)
-                // 必須載入所有人的出席紀錄以計算排名
-                const [allAttendance, allActivities] = await Promise.all([
-                    fetchAttendance(),
-                    fetchActivities()
-                ]);
-
-                // 準備數據
-                const userName = userProfile.name; // 注意：attendance table 存的是 display_name 還是 name? 通常是 member.name
-                // 如果 attendance table 存的是中文名，而 userProfile.name 是英文，會對不上。
-                // 這裡假設系統一致性：CoachPage 使用 member.name 進行點名。
-                // 我們嘗試用 member table 的 name 來確保一致
-                let targetName = userName;
-                const { data: memberData } = await supabase
-                    .from('members')
-                    .select('name')
-                    .eq('email', userProfile.email)
-                    .maybeSingle();
-
-                if (memberData) targetName = memberData.name;
-
-                const now = new Date();
-                const currentYear = now.getFullYear();
-                const currentMonth = now.getMonth() + 1;
-
-                // (A) 本月練習次數
-                // 邏輯：出席紀錄中，日期在當前的次數
-                const myRecords = allAttendance.filter(r => r.Name === targetName);
-                const monthlyRecords = myRecords.filter(r => {
-                    // Date format in DB: YYYY-MM-DD or YYYY/MM/DD
-                    const d = new Date(r.Date.replace(/\//g, '-'));
-                    return d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth;
-                });
-                const monthlyCount = monthlyRecords.length;
-
-                // (B) 本月排名
-                // 邏輯：計算所有人在本月的出席次數，排序
-                const boardMap = {};
-                allAttendance.forEach(r => {
-                    const d = new Date(r.Date.replace(/\//g, '-'));
-                    if (d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth) {
-                        boardMap[r.Name] = (boardMap[r.Name] || 0) + 1;
-                    }
-                });
-
-                const sortedBoard = Object.entries(boardMap)
-                    .sort(([, countA], [, countB]) => countB - countA) // Count Desc
-                    .map(([name, count]) => ({ name, count }));
-
-                const myRankIndex = sortedBoard.findIndex(item => item.name === targetName);
-                // 如果沒有出席紀錄，則名次為 -
-                const myRank = (myRankIndex !== -1 && monthlyCount > 0) ? myRankIndex + 1 : '-';
-
-
-                // (C) 連續出席 (Consecutive Attendance)
-                // 邏輯：找出所有已發生的 "船練" (boat_practice) 日期，倒序檢查使用者是否出席
-                // 這比單純檢查 user attendance 更嚴謹，因為能偵測缺席
-                const pastPractices = allActivities
-                    .filter(a => a.type === 'boat_practice' && new Date(a.date) < now) // 只看過去的船練
-                    .map(a => a.date.split('(')[0].replace(/\//g, '-')) // YYYY-MM-DD
-                    .sort((a, b) => new Date(b) - new Date(a)); // Descending (Latest first)
-
-                const myAttendedDates = new Set(myRecords.map(r => r.Date.split('(')[0].replace(/\//g, '-')));
-
-                let streak = 0;
-                for (const practiceDate of pastPractices) {
-                    if (myAttendedDates.has(practiceDate)) {
-                        streak++;
-                    } else {
-                        // 斷掉了
-                        break;
-                    }
-                }
-
-                // (D) 總出席次數 (Total Practices) for Badge System
-                const totalPractices = myRecords.length;
-
-                setStats({
-                    totalPoints: totalPoints || 0,
-                    monthlyPractices: monthlyCount,
-                    currentStreak: streak,
-                    rank: myRank,
-                    totalPractices: totalPractices
-                });
-
-            } catch (err) {
-                console.error("Dashboard stats error:", err);
-            }
-        };
-
-        calculateStats();
-    }, [userProfile]);
+        loadAll();
+    }, [userProfile, lang]);
 
     // 取得顯示名稱：優先使用 members 表的名字
     const displayName = memberName || userProfile?.name || (lang === 'zh' ? '划手' : 'Paddler');
