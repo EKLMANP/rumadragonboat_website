@@ -779,18 +779,62 @@ const CoachPage = () => {
       return;
     }
 
-    if (registrations.length === 0) {
-      Swal.fire('還沒有隊友報名喔!', '目前沒有任何報名資料', 'info');
-      return;
-    }
+    // Build user lookup maps from allUsers (members table data)
+    const usersByName = {};
+    const usersByEmail = {};
+    allUsers.forEach(u => {
+      if (u.Name) usersByName[u.Name] = u;
+      if (u.Email) usersByEmail[u.Email.toLowerCase()] = u;
+    });
+
+    // Build adminMembers lookup by user_id → email (for users without members.user_id link)
+    const adminEmailById = {};
+    adminMembers.forEach(u => {
+      if (u.id && u.email) adminEmailById[u.id] = u.email.toLowerCase();
+    });
 
     const newCharts = {};
+    let hasAnyRegistrations = false;
+
     dbDates.forEach(item => {
-      const registeredNames = registrations.filter(r => r.practicedates === item.date).map(r => r.name);
-      if (registeredNames.length === 0) return;
-      const participants = allUsers.filter(u => registeredNames.includes(u.Name)).map(u => {
-        const attendanceCount = (rawAttendanceHistory || []).filter(r => r.Name === u.Name).length;
-        return { ...u, attendanceCount };
+      // Find activity for this date
+      const dateStr = item.date.split('(')[0].replace(/\//g, '-');
+      const activity = activities.find(a => a.date === dateStr && a.type === 'boat_practice');
+      if (!activity) return;
+
+      // Get registrations for this activity directly from activityRegistrations (has user_id)
+      const dateRegs = activityRegistrations.filter(r => r.activity_id === activity.id);
+      if (dateRegs.length === 0) return;
+      hasAnyRegistrations = true;
+
+      // Match each registration to a member by user_id or email
+      const participants = [];
+      dateRegs.forEach(r => {
+        let member = null;
+
+        // Try 1: Direct user_id match — allUsers may have it if members.user_id is set
+        // We need to look up by email since allUsers doesn't store user_id
+        const email = adminEmailById[r.user_id];
+        if (email) {
+          member = usersByEmail[email];
+        }
+
+        // Try 2: If adminMembers has memberName, try by name
+        if (!member) {
+          const adminUser = adminMembers.find(u => u.id === r.user_id);
+          if (adminUser?.memberName) {
+            member = usersByName[adminUser.memberName];
+          }
+          // Try by email from adminUser
+          if (!member && adminUser?.email) {
+            member = usersByEmail[adminUser.email.toLowerCase()];
+          }
+        }
+
+        if (member) {
+          const attendanceCount = (rawAttendanceHistory || []).filter(rec => rec.Name === member.Name).length;
+          participants.push({ ...member, attendanceCount });
+        }
       });
 
       let { boat, reserve } = generateSeating(participants);
@@ -801,6 +845,12 @@ const CoachPage = () => {
       // 🔥 Sync to DB Immediately
       saveSeatingArrangement(item.date, boatData).catch(err => console.error('Auto-save failed:', err));
     });
+
+    if (!hasAnyRegistrations) {
+      Swal.fire('還沒有隊友報名喔!', '目前沒有任何報名資料', 'info');
+      return;
+    }
+
     setSeatingCharts(newCharts);
 
     Swal.fire({
