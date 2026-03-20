@@ -788,6 +788,18 @@ const CoachPage = () => {
       if (u.Email) usersByEmail[u.Email.toLowerCase()] = u;
     });
 
+    // 🔍 DEBUG: Log state sizes and sample data
+    console.log('=== SEATING DEBUG ===');
+    console.log('allUsers count:', allUsers.length);
+    console.log('allUsers sample (first 3):', allUsers.slice(0, 3).map(u => ({ Name: u.Name, UserId: u.UserId, Email: u.Email })));
+    console.log('usersByUserId keys count:', Object.keys(usersByUserId).length);
+    console.log('usersByUserId sample keys:', Object.keys(usersByUserId).slice(0, 3));
+    console.log('adminMembers count:', adminMembers.length);
+    console.log('activityRegistrations count:', activityRegistrations.length);
+    console.log('activityRegistrations sample (first 3):', activityRegistrations.slice(0, 3).map(r => ({ user_id: r.user_id, activity_id: r.activity_id })));
+    console.log('activities (boat_practice):', activities.filter(a => a.type === 'boat_practice').map(a => ({ id: a.id, date: a.date })));
+    console.log('dbDates:', dbDates.map(d => d.date));
+
     const newCharts = {};
     let hasAnyRegistrations = false;
 
@@ -795,15 +807,20 @@ const CoachPage = () => {
       // Find activity for this date
       const dateStr = item.date.split('(')[0].replace(/\//g, '-');
       const activity = activities.find(a => a.date === dateStr && a.type === 'boat_practice');
-      if (!activity) return;
+      if (!activity) {
+        console.log(`No activity found for dateStr=${dateStr}`);
+        return;
+      }
 
       // Get registrations for this activity directly from activityRegistrations (has user_id)
       const dateRegs = activityRegistrations.filter(r => r.activity_id === activity.id);
+      console.log(`Date ${dateStr}: activity.id=${activity.id}, dateRegs=${dateRegs.length}`);
       if (dateRegs.length === 0) return;
       hasAnyRegistrations = true;
 
       // Match each registration to a member — primary: user_id, fallback: email
       const participants = [];
+      let matchedCount = 0, missedCount = 0;
       dateRegs.forEach(r => {
         // Primary: match activity_registrations.user_id → members.user_id (direct, no RPC needed)
         let member = usersByUserId[r.user_id];
@@ -817,10 +834,15 @@ const CoachPage = () => {
         }
 
         if (member) {
+          matchedCount++;
           const attendanceCount = (rawAttendanceHistory || []).filter(rec => rec.Name === member.Name).length;
           participants.push({ ...member, attendanceCount });
+        } else {
+          missedCount++;
+          console.log(`  MISS: user_id=${r.user_id}, in usersByUserId=${!!usersByUserId[r.user_id]}`);
         }
       });
+      console.log(`  Matched: ${matchedCount}, Missed: ${missedCount}, Participants: ${participants.length}`);
 
       let { boat, reserve } = generateSeating(participants);
       let boatData = { ...boat, reserve };
