@@ -443,10 +443,12 @@ const CoachPage = () => {
       setActivityRegistrations(actRegsData || []);
 
       // 單獨輕量請求 members (可能失敗所以包 try-catch)
+      let membersData = null;
       try {
-        const { data: membersData } = await import('../lib/supabase').then(m =>
+        const { data } = await import('../lib/supabase').then(m =>
           m.supabase.from('members').select('name, email, weight, position, skill_rating').order('name')
         );
+        membersData = data;
         const allUsersData = (membersData || []).map(m => ({
           Name: m.name,
           Email: m.email,

@@ -147,16 +147,40 @@ export default function PracticePage() {
                 return;
             }
 
-            // 4. Get participant details directly from members table (lightweight)
-            // members table already has user_id linked to auth.users — no need for heavy admin RPC
+            // 4. Get participant details from members table
+            // Some members may have NULL user_id, so we need a fallback via email
             const userIds = regs.map(r => r.user_id).filter(Boolean);
-            const { data: memberDetails } = userIds.length > 0
+
+            // Step A: Try to find members by user_id (fast, covers most users)
+            const { data: membersByUserId } = userIds.length > 0
                 ? await supabase.from('members')
                     .select('name, email, weight, position, skill_rating, user_id')
                     .in('user_id', userIds)
                 : { data: [] };
 
-            const participants = (memberDetails || []).map(m => ({
+            const foundUserIds = new Set((membersByUserId || []).map(m => m.user_id));
+            const missingUserIds = userIds.filter(id => !foundUserIds.has(id));
+
+            // Step B: For missing user_ids, look up their email from auth then match in members
+            let membersByEmail = [];
+            if (missingUserIds.length > 0) {
+                // Get emails from admin_list_users_with_roles for the missing users
+                const { data: allAuthUsers } = await supabase.rpc('admin_list_users_with_roles');
+                const missingEmails = (allAuthUsers || [])
+                    .filter(u => missingUserIds.includes(u.user_id) && u.email)
+                    .map(u => u.email.toLowerCase());
+
+                if (missingEmails.length > 0) {
+                    const { data: emailMatches } = await supabase.from('members')
+                        .select('name, email, weight, position, skill_rating');
+                    membersByEmail = (emailMatches || []).filter(m =>
+                        m.email && missingEmails.includes(m.email.toLowerCase())
+                    );
+                }
+            }
+
+            const allMembers = [...(membersByUserId || []), ...membersByEmail];
+            const participants = allMembers.map(m => ({
                 Name: m.name || m.email || 'Unknown',
                 Weight: m.weight || 0,
                 Position: m.position || '左右',
