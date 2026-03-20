@@ -446,10 +446,11 @@ const CoachPage = () => {
       let membersData = null;
       try {
         const { data } = await import('../lib/supabase').then(m =>
-          m.supabase.from('members').select('name, email, weight, position, skill_rating').order('name')
+          m.supabase.from('members').select('user_id, name, email, weight, position, skill_rating').order('name')
         );
         membersData = data;
         const allUsersData = (membersData || []).map(m => ({
+          UserId: m.user_id,
           Name: m.name,
           Email: m.email,
           Weight: m.weight,
@@ -779,18 +780,12 @@ const CoachPage = () => {
       return;
     }
 
-    // Build user lookup maps from allUsers (members table data)
-    const usersByName = {};
+    // Build lookup maps from allUsers (members table data — now includes UserId)
+    const usersByUserId = {};
     const usersByEmail = {};
     allUsers.forEach(u => {
-      if (u.Name) usersByName[u.Name] = u;
+      if (u.UserId) usersByUserId[u.UserId] = u;
       if (u.Email) usersByEmail[u.Email.toLowerCase()] = u;
-    });
-
-    // Build adminMembers lookup by user_id → email (for users without members.user_id link)
-    const adminEmailById = {};
-    adminMembers.forEach(u => {
-      if (u.id && u.email) adminEmailById[u.id] = u.email.toLowerCase();
     });
 
     const newCharts = {};
@@ -807,26 +802,16 @@ const CoachPage = () => {
       if (dateRegs.length === 0) return;
       hasAnyRegistrations = true;
 
-      // Match each registration to a member by user_id or email
+      // Match each registration to a member — primary: user_id, fallback: email
       const participants = [];
       dateRegs.forEach(r => {
-        let member = null;
+        // Primary: match activity_registrations.user_id → members.user_id (direct, no RPC needed)
+        let member = usersByUserId[r.user_id];
 
-        // Try 1: Direct user_id match — allUsers may have it if members.user_id is set
-        // We need to look up by email since allUsers doesn't store user_id
-        const email = adminEmailById[r.user_id];
-        if (email) {
-          member = usersByEmail[email];
-        }
-
-        // Try 2: If adminMembers has memberName, try by name
-        if (!member) {
+        // Fallback: for members with NULL user_id, try email via adminMembers
+        if (!member && adminMembers.length > 0) {
           const adminUser = adminMembers.find(u => u.id === r.user_id);
-          if (adminUser?.memberName) {
-            member = usersByName[adminUser.memberName];
-          }
-          // Try by email from adminUser
-          if (!member && adminUser?.email) {
+          if (adminUser?.email) {
             member = usersByEmail[adminUser.email.toLowerCase()];
           }
         }
