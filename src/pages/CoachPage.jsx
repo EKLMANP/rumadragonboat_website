@@ -2105,12 +2105,13 @@ const CoachPage = () => {
                     (() => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const validRollCallDates = dbDates.filter(item => {
-                        const dateStr = item.date.split('(')[0];
-                        const [year, month, day] = dateStr.split('/');
-                        const itemDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                        itemDate.setHours(0, 0, 0, 0);
-                        return itemDate >= today;
+
+                      // Show ALL dates (past + future) sorted by most recent first
+                      // This allows retroactive (補) roll call for past sessions
+                      const validRollCallDates = [...dbDates].sort((a, b) => {
+                        const da = new Date(a.date.split('(')[0].replace(/\//g, '-'));
+                        const db2 = new Date(b.date.split('(')[0].replace(/\//g, '-'));
+                        return db2 - da;
                       });
 
                       const totalPages = Math.ceil(validRollCallDates.length / rollCallItemsPerPage);
@@ -2120,7 +2121,7 @@ const CoachPage = () => {
                       if (validRollCallDates.length === 0) {
                         return (
                           <div className="text-center py-12 text-gray-400 border-2 border-dashed rounded-lg">
-                            {lang === 'zh' ? '目前沒有即將到來的練習場次。' : 'No upcoming practice sessions available.'}
+                            {lang === 'zh' ? '目前沒有任何練習場次。' : 'No practice sessions available.'}
                           </div>
                         );
                       }
@@ -2128,25 +2129,93 @@ const CoachPage = () => {
                       return (
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {paginatedDates.map((item) => (
-                              <div key={item.date}
-                                onClick={() => openRollCall(item.date)}
-                                className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-green-400 transition-all flex flex-col gap-3 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                                  <ClipboardList size={48} className="text-green-500" />
+                            {paginatedDates.map((item) => {
+                              // Detect if this date has already been rolled call
+                              const targetDateSimple = item.date.split('(')[0].replace(/\//g, '-');
+                              const isRolledCall = rawAttendanceHistory.some(r => {
+                                const rDate = r.Date.split('(')[0].replace(/\//g, '-');
+                                return rDate === targetDateSimple;
+                              });
+
+                              // Detect if the activity date is in the past
+                              const [year, month, day] = targetDateSimple.split('-');
+                              const itemDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                              itemDate.setHours(0, 0, 0, 0);
+                              const isPast = itemDate < today;
+                              const isToday = itemDate.getTime() === today.getTime();
+
+                              const handleClick = async () => {
+                                if (isRolledCall) {
+                                  const confirm = await Swal.fire({
+                                    title: lang === 'zh' ? '此場次已完成點名' : 'Roll Call Already Done',
+                                    text: lang === 'zh' ? '確定要補充/重新點名嗎？（舊紀錄將被更新）' : 'Re-doing roll call will update the existing records.',
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonColor: '#16a34a',
+                                    confirmButtonText: lang === 'zh' ? '確定補點名' : 'Proceed',
+                                    cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
+                                  });
+                                  if (!confirm.isConfirmed) return;
+                                }
+                                openRollCall(item.date);
+                              };
+
+                              return (
+                                <div key={item.date}
+                                  onClick={handleClick}
+                                  className={`group cursor-pointer bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden
+                                    ${isRolledCall
+                                      ? 'border-green-400 bg-green-50 hover:border-green-500'
+                                      : 'border-gray-200 hover:border-green-400'
+                                    }`}>
+
+                                  {/* Background icon */}
+                                  <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition">
+                                    <ClipboardList size={48} className={isRolledCall ? 'text-green-600' : 'text-green-500'} />
+                                  </div>
+
+                                  {/* Date + status badges row */}
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2 text-green-700 font-bold text-lg">
+                                      <Calendar size={20} /> {item.date.split('(')[0]}
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {isRolledCall && (
+                                        <span className="flex items-center gap-1 text-xs bg-green-600 text-white font-bold px-2 py-0.5 rounded-full">
+                                          ✓ {lang === 'zh' ? '已點名' : 'Done'}
+                                        </span>
+                                      )}
+                                      {isPast && !isToday && (
+                                        <span className="text-xs bg-gray-200 text-gray-600 font-medium px-2 py-0.5 rounded-full">
+                                          {lang === 'zh' ? '已結束' : 'Past'}
+                                        </span>
+                                      )}
+                                      {isToday && (
+                                        <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
+                                          {lang === 'zh' ? '今天' : 'Today'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1 text-sm text-gray-600">
+                                    <span className="flex items-center gap-1"><Clock size={14} /> {item.time}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
+                                  </div>
+
+                                  <button className={`mt-2 w-full py-2 font-bold rounded-lg transition
+                                    ${isRolledCall
+                                      ? 'bg-green-100 text-green-700 group-hover:bg-green-600 group-hover:text-white'
+                                      : 'bg-green-50 text-green-700 group-hover:bg-green-600 group-hover:text-white'
+                                    }`}>
+                                    {isRolledCall
+                                      ? (lang === 'zh' ? '📝 補充點名' : 'Update Roll Call')
+                                      : (lang === 'zh' ? '開始點名' : 'Start Roll Call')
+                                    }
+                                  </button>
                                 </div>
-                                <div className="flex items-center gap-2 text-green-700 font-bold text-lg">
-                                  <Calendar size={20} /> {item.date.split('(')[0]}
-                                </div>
-                                <div className="flex flex-col gap-1 text-sm text-gray-600">
-                                  <span className="flex items-center gap-1"><Clock size={14} /> {item.time}</span>
-                                  <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
-                                </div>
-                                <button className="mt-2 w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg group-hover:bg-green-600 group-hover:text-white transition">
-                                  {lang === 'zh' ? '開始點名' : 'Start Roll Call'}
-                                </button>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
 
                           {totalPages > 1 && (
