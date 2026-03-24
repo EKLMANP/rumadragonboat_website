@@ -996,17 +996,18 @@ const addTrainingRecord = async (params) => {
 
 /**
  * 儲存出席名單（對應 saveAttendance）
+ * Stage 1 (fast, awaited): delete + insert attendance records — returns in < 1s
+ * Stage 2 (background, fire-and-forget): award M-points using batched Promise.all
  */
 export const saveAttendance = async (date, attendees) => {
     try {
-        // 1. 先執行原本的點名儲存邏輯 (重置當日出席)
+        // === STAGE 1: Save attendance (fast path — UI waits for this) ===
         await supabase
             .from('attendance')
             .delete()
             .eq('practice_date', date);
 
         if (attendees && attendees.length > 0) {
-            // 去除重複名單，避免 Unique Constraint Error
             const uniqueAttendees = [...new Set(attendees)];
 
             const inserts = uniqueAttendees.map(name => ({
@@ -1022,94 +1023,94 @@ export const saveAttendance = async (date, attendees) => {
                 return { success: false, message: error.message };
             }
 
-            // 2. M 點自動發放邏輯 (Server-side simulation)
-            // 策略：找出「本次點名單中」且「尚未獲得該日練船點數」的人，發放點數
-            // 注意：目前只發放，不扣回 (若被取消點名，暫不自動扣點，由管理員手動調整或未來實作)
-
-            try {
-                // (a) 取得練船點數規則 (PRACTICE_REGULAR)
-                let pointsToAward = 1;
-                let ruleId = null;
-                const { data: rule } = await supabase
-                    .from('point_rules')
-                    .select('id, base_points')
-                    .eq('rule_code', 'PRACTICE_REGULAR') // 假設一般練船
-                    .maybeSingle();
-
-                if (rule) {
-                    pointsToAward = rule.base_points || 1;
-                    ruleId = rule.id;
-                }
-
-                // (b) 取得出席成員的詳細資訊 (需要 user_id 和目前點數)
-                // attendees 是名字陣列 ['Eric', 'Pennee', ...]
-                const { data: members, error: memberError } = await supabase
-                    .from('members')
-                    .select('name, user_id, total_points, email')
-                    .in('name', attendees);
-
-                if (memberError) throw memberError;
-
-                if (members && members.length > 0) {
-                    // (c) 檢查這些人當天是否已經拿過 "PRACTICE_%" 類型的點數
-                    // source_id 紀錄為日期字串 "YYYY-MM-DD"
-                    // 為了避免重複發放，我們檢查 point_events
-                    const userIds = members.map(m => m.user_id).filter(id => id); // 過濾掉沒有 user_id 的 (未綁定)
-
-                    if (userIds.length > 0) {
-                        const { data: existingEvents } = await supabase
-                            .from('point_events')
-                            .select('user_id')
-                            .eq('source_type', 'practice')
-                            .eq('source_id', date) // 確保同一天不重複發
-                            .in('user_id', userIds);
-
-                        const existingUserIds = new Set((existingEvents || []).map(e => e.user_id));
-
-                        // (d) 針對「未領過」的成員發放點數
-                        for (const member of members) {
-                            // 跳過無 user_id 的成員 (無法發點)
-                            if (!member.user_id) continue;
-
-                            // 跳過已領過的成員
-                            if (existingUserIds.has(member.user_id)) continue;
-
-                            // -- 發放點數 --
-                            const newTotal = (member.total_points || 0) + pointsToAward;
-
-                            // 1. 更新 members 表
-                            await supabase
-                                .from('members')
-                                .update({ total_points: newTotal })
-                                .eq('user_id', member.user_id);
-
-                            // 2. 寫入 point_events 表
-                            await supabase.from('point_events').insert({
-                                user_id: member.user_id,
-                                event_type: 'earned',
-                                points_change: pointsToAward,
-                                balance_after: newTotal,
-                                source_type: 'practice',
-                                source_id: date,
-                                rule_id: ruleId,
-                                description: `出席練習 (${date})`
-                            });
-
-                            console.log(`已發放點數給 ${member.name}: +${pointsToAward}`);
-                        }
-                    }
-                }
-
-            } catch (pointError) {
-                console.error("Auto-award points failed:", pointError);
-                // 點名本身成功，但發點失敗，僅 log 不阻擋流程
-            }
+            // === STAGE 2: Award M-points in background (fire-and-forget, never blocks UI) ===
+            awardPointsForAttendance(date, uniqueAttendees).catch(err =>
+                console.error('Background M-point awarding failed:', err)
+            );
         }
 
+        // Return immediately — M-points run in the background
         return { success: true };
     } catch (error) {
         console.error("Error saving attendance:", error);
         return { success: false, message: error.message };
+    }
+};
+
+/**
+ * Background M-point awarding — runs after attendance is saved, never blocks UI.
+ * Uses batched parallel inserts (Promise.all) instead of sequential await loops.
+ */
+const awardPointsForAttendance = async (date, uniqueAttendees) => {
+    try {
+        // (a) Fetch point rule + member data in parallel
+        const [ruleResult, membersResult] = await Promise.all([
+            supabase
+                .from('point_rules')
+                .select('id, base_points')
+                .eq('rule_code', 'PRACTICE_REGULAR')
+                .maybeSingle(),
+            supabase
+                .from('members')
+                .select('name, user_id, total_points')
+                .in('name', uniqueAttendees)
+        ]);
+
+        const rule = ruleResult.data;
+        const members = membersResult.data;
+
+        if (!members || members.length === 0) return;
+
+        const pointsToAward = rule?.base_points || 1;
+        const ruleId = rule?.id || null;
+
+        // Filter to only members with a user_id
+        const eligibleMembers = members.filter(m => m.user_id);
+        if (eligibleMembers.length === 0) return;
+
+        const userIds = eligibleMembers.map(m => m.user_id);
+
+        // (b) Check who already received points for this date — single batched query
+        const { data: existingEvents } = await supabase
+            .from('point_events')
+            .select('user_id')
+            .eq('source_type', 'practice')
+            .eq('source_id', date)
+            .in('user_id', userIds);
+
+        const existingUserIds = new Set((existingEvents || []).map(e => e.user_id));
+
+        // (c) Only award to members who haven't received points yet
+        const newRecipients = eligibleMembers.filter(m => !existingUserIds.has(m.user_id));
+        if (newRecipients.length === 0) return;
+
+        // (d) Batch all DB writes in parallel (Promise.all — not sequential)
+        await Promise.all(newRecipients.flatMap(member => {
+            const newTotal = (member.total_points || 0) + pointsToAward;
+            return [
+                supabase
+                    .from('members')
+                    .update({ total_points: newTotal })
+                    .eq('user_id', member.user_id),
+                supabase
+                    .from('point_events')
+                    .insert({
+                        user_id: member.user_id,
+                        event_type: 'earned',
+                        points_change: pointsToAward,
+                        balance_after: newTotal,
+                        source_type: 'practice',
+                        source_id: date,
+                        rule_id: ruleId,
+                        description: `出席練習 (${date})`
+                    })
+            ];
+        }));
+
+        console.log(`M-points awarded to ${newRecipients.length} members for ${date}`);
+    } catch (err) {
+        // Background failure — log only, doesn't affect the user's confirmed attendance
+        console.error('awardPointsForAttendance error:', err);
     }
 };
 
