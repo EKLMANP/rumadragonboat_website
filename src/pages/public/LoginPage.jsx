@@ -79,15 +79,12 @@ export default function LoginPage() {
             {/* Header - 與首頁一致 */}
             <header className="bg-black/80 backdrop-blur-sm shadow-sm border-b border-red-900/30">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-2 group">
+                    <Link to="/" className="flex items-center group">
                         <img
-                            src="/logo_website.png"
+                            src="/Header_Footer_v2.png"
                             alt="RUMA Logo"
-                            className="h-8 md:h-10 w-auto group-hover:scale-110 transition"
+                            className="h-5 md:h-6 w-auto group-hover:scale-105 transition"
                         />
-                        <span className="font-black text-xl md:text-2xl tracking-tight text-white">
-                            <span className="text-red-500">RUMA</span>
-                        </span>
                     </Link>
                 </div>
             </header>
@@ -96,9 +93,8 @@ export default function LoginPage() {
             <main className="flex-grow flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
                     <div className="bg-white rounded-3xl shadow-xl p-8">
-                        {/* Logo */}
-                        <div className="text-center mb-8">
-                            <div className="text-6xl mb-4">🚣</div>
+                        {/* Title */}
+                        <div className="text-center mb-6">
                             <h1 className="text-2xl font-bold text-gray-800">隊友登入</h1>
                         </div>
 
@@ -203,7 +199,7 @@ export default function LoginPage() {
             {/* Footer */}
             <footer className="bg-black text-white text-center py-4 border-t border-red-900/30">
                 <div className="flex items-center justify-center gap-2">
-                    <img src="/logo_website.png" alt="RUMA" className="h-5 w-auto" />
+                    <img src="/Header_Footer_v2.png" alt="RUMA" className="h-3 w-auto" />
                     <span>Designed by{' '}</span>
                     <a
                         href="https://www.instagram.com/ruma_dragonboat"

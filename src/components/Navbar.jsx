@@ -6,7 +6,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { User, Anchor, Calendar, Package, Shield, FileText, Settings, LogOut, ChevronDown, Globe, Menu, X, Home, Megaphone, Ship, MapPin, ClipboardList } from 'lucide-react';
+import { User, Anchor, Calendar, Package, Shield, FileText, Settings, LogOut, ChevronDown, Globe, Menu, X, Home, Megaphone, Ship, MapPin, ClipboardList, Film } from 'lucide-react';
 
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -126,6 +126,7 @@ export default function Navbar() {
         { path: '/app/announcements', label: lang === 'zh' ? '最新公告' : 'Announcement', icon: Megaphone },
         { path: '/app/calendar', label: lang === 'zh' ? '年度日程表' : 'Annual calendar', icon: Calendar },
         { path: '/app/practice', label: lang === 'zh' ? '活動報名' : 'Event registration', icon: Ship },
+        { path: '/app/videos', label: lang === 'zh' ? '各式影片' : 'Videos', icon: Film },
         { path: '/app/journey', label: lang === 'zh' ? '我的龍舟旅程' : 'My journey', icon: MapPin },
         { path: '/app/equipment', label: lang === 'zh' ? '公用裝備查詢' : 'Team equipment', icon: Package },
         { path: '/app/profile', label: lang === 'zh' ? '個人資料' : 'Personal information', icon: User },
@@ -174,15 +175,12 @@ export default function Navbar() {
             <div className="max-w-7xl mx-auto px-4">
                 <div className="flex items-center justify-between h-16 md:h-20">
                     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2 shrink-0 group">
+                    <Link to="/" className="flex items-center shrink-0 group">
                         <img
-                            src={isAppPage ? "/RUMA_logo_APP.png" : "/logo_website.png"}
+                            src="/Header_Footer_v2.png"
                             alt="RUMA Logo"
-                            className="h-8 md:h-10 w-auto group-hover:scale-110 transition"
+                            className="h-5 md:h-6 w-auto group-hover:scale-105 transition"
                         />
-                        <span className={`font-black text-xl md:text-2xl tracking-tight ${textColor}`}>
-                            <span className="text-red-500">RUMA</span>
-                        </span>
                     </Link>
 
                     {/* Desktop Navigation */}

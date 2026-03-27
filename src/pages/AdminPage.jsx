@@ -4,13 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
   ChevronDown, ChevronUp, MinusCircle, Edit, Check, X, Plus,
-  Users, Package, RefreshCw, Settings, Save, FileText, Mail, Shield
+  Users, Package, RefreshCw, Settings, Save, FileText, Mail, Shield, MessageSquareWarning, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import {
   fetchAllData, postData,
-  adminCreateUser, adminDeleteUser, adminListUsers, adminUpdateUserRole
+  adminCreateUser, adminDeleteUser, adminListUsers, adminUpdateUserRole,
+  fetchBugReports, updateBugReportStatus
 } from '../api/supabaseApi';
 import AppLayout from '../components/AppLayout';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // --- 選項定義 ---
 const POSITION_OPTIONS = [
@@ -30,6 +32,7 @@ const COUNT_OPTIONS_1_10 = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const AdminPage = () => {
   const navigate = useNavigate();
+  const { t, lang } = useLanguage();
 
 
   const [loading, setLoading] = useState(false);
@@ -42,6 +45,11 @@ const AdminPage = () => {
   const [equipment, setEquipment] = useState([]);
   const [borrowRecords, setBorrowRecords] = useState([]);
   const [authUsers, setAuthUsers] = useState([]); // 新增使用者管理狀態
+  const [bugs, setBugs] = useState([]); // Bug Reports
+  const [bugPage, setBugPage] = useState(1); // Bug pagination
+  const [memberPage, setMemberPage] = useState(1); // Member list pagination
+  const [rolePage, setRolePage] = useState(1); // Role management pagination
+  const [expandedBugId, setExpandedBugId] = useState(null); // Bug description expand state
 
   // --- 隊員表單狀態 ---
   const [newFormData, setNewFormData] = useState({
@@ -90,6 +98,25 @@ const AdminPage = () => {
     }
   };
 
+  const loadBugReports = async () => {
+    setLoading(true);
+    const data = await fetchBugReports();
+    setBugs(data);
+    setLoading(false);
+  };
+
+  const handleToggleBugStatus = async (bugId, currentStatus) => {
+    setLoading(true);
+    const res = await updateBugReportStatus(bugId, !currentStatus);
+    if (res.success) {
+      await loadBugReports();
+      Swal.fire('已更新狀態', '', 'success');
+    } else {
+      Swal.fire('更新失敗', res.message, 'error');
+    }
+    setLoading(false);
+  };
+
 
 
   // ==========================================
@@ -104,14 +131,28 @@ const AdminPage = () => {
   useEffect(() => {
     if (activeTab === 'auth_users') {
       loadAuthUsers();
+    } else if (activeTab === 'bugs') {
+      loadBugReports();
     }
   }, [activeTab]);
 
   // ==========================================
   // 2. 資料讀取
   // ==========================================
-  const loadData = async () => {
-    setLoading(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // 模糊搜尋隊員
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm) return true;
+    const lowerTerm = searchTerm.toLowerCase();
+    return (
+      (user.Name && user.Name.toLowerCase().includes(lowerTerm)) ||
+      (user.Email && user.Email.toLowerCase().includes(lowerTerm))
+    );
+  });
+
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // 使用輕量查詢取代 fetchAllData，避免超時
       const { supabase } = await import('../lib/supabase');
@@ -144,7 +185,65 @@ const AdminPage = () => {
     } catch (e) {
       console.error("載入失敗:", e);
     } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const loadAuthUsers = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res = await adminListUsers();
+      if (res.success && res.data?.users) {
+        setAuthUsers(res.data.users);
+      } else {
+        setAuthUsers([]);
+        console.warn('無法載入使用者列表:', res.message);
+      }
+    } catch (e) {
+      console.error('載入 Auth Users 失敗:', e);
+      setAuthUsers([]);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleCreateAuth = async () => {
+    if (!authForm.email || !authForm.name) {
+      return Swal.fire('請填寫完整資訊', '', 'warning');
+    }
+    setLoading(true);
+    const res = await adminCreateUser(authForm.email, '000000', authForm.name, authForm.role);
+    setLoading(false);
+    if (res.success) {
+      Swal.fire({ icon: 'success', title: '使用者已建立', text: '預設密碼: 000000', timer: 2000 });
+      setAuthForm({ email: '', name: '', role: 'member' });
+      loadAuthUsers();
+    } else {
+      Swal.fire('建立失敗', res.message, 'error');
+    }
+  };
+
+  const handleDeleteAuth = async (userId) => {
+    const confirm = await Swal.fire({
+      title: '確定刪除此使用者?',
+      text: '此操作將無法復原',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: '刪除',
+      cancelButtonText: '取消'
+    });
+
+    if (confirm.isConfirmed) {
+      setLoading(true);
+      const res = await adminDeleteUser(userId);
       setLoading(false);
+      if (res.success) {
+        Swal.fire('已刪除', '', 'success');
+        loadAuthUsers();
+      } else {
+        Swal.fire('刪除失敗', res.message, 'error');
+      }
     }
   };
 
@@ -221,14 +320,46 @@ const AdminPage = () => {
 
     setLoading(true);
     const res = await postData('addUser', newFormData);
-    setLoading(false);
 
     if (res.success) {
+      // 顯示成功訊息 (先顯示，不阻塞後續操作)
       Swal.fire({ icon: 'success', title: '新增成功', timer: 1500, showConfirmButton: false });
-      Swal.fire({ icon: 'success', title: '新增成功', timer: 1500, showConfirmButton: false });
+
+      // Optimistic UI: 立即更新本地 state
+      setUsers(prev => [...prev, {
+        Name: newFormData.Name,
+        Email: newFormData.Email || '',
+        Weight: newFormData.Weight || '',
+        Position: newFormData.Position,
+        Skill_Rating: newFormData.Skill_Rating
+      }]);
+
+      // 清空表單
       setNewFormData({ Name: '', Email: '', Weight: '', Position: POSITION_OPTIONS[0], Skill_Rating: '1' });
-      loadData();
+      setLoading(false);
+
+      // 背景非同步操作 (不阻塞 UI)
+      (async () => {
+        // 如果有 Email，嘗試建立 auth 帳號 (帶超時保護)
+        if (newFormData.Email) {
+          try {
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 5000)
+            );
+            await Promise.race([
+              adminCreateUser(newFormData.Email, '000000', newFormData.Name, 'member'),
+              timeoutPromise
+            ]);
+          } catch (e) {
+            console.warn('自動建立帳號失敗或超時:', e.message);
+          }
+        }
+
+        // 背景重新載入資料 (平行執行，靜默模式)
+        Promise.all([loadData(true), loadAuthUsers(true)]).catch(console.error);
+      })();
     } else {
+      setLoading(false);
       Swal.fire('新增失敗', res.message, 'error');
     }
   };
@@ -373,10 +504,10 @@ const AdminPage = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
-                🔧 管理員後台
+                {t('admin_title')}
               </h1>
               <p className="text-gray-500 mt-1">
-                建立隊員資料與更新公用裝備狀態
+                {t('admin_desc')}
               </p>
             </div>
             <button
@@ -385,7 +516,55 @@ const AdminPage = () => {
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center gap-2 disabled:opacity-50"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              重新載入
+              {t('admin_reload')}
+            </button>
+          </div>
+        </div>
+
+
+
+        {/* 頁籤切換 */}
+        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 overflow-x-auto">
+          <div className="flex gap-2 min-w-max md:min-w-0">
+            <button
+              onClick={() => setActiveTab('members')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
+              ${activeTab === 'members'
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Users size={18} />
+              <span className="hidden sm:inline">{lang === 'zh' ? '隊員資料' : 'Member'}</span>{lang === 'zh' ? '管理' : 'Management'}
+            </button>
+            <button
+              onClick={() => setActiveTab('equipment')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
+              ${activeTab === 'equipment'
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Package size={18} />
+              {t('admin_tab_equipment')}
+            </button>
+            <button
+              onClick={() => setActiveTab('auth_users')}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
+              ${activeTab === 'auth_users'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                } `}
+            >
+              <Shield size={18} />
+              <span className="hidden sm:inline">{lang === 'zh' ? '使用者' : 'User'}</span>{lang === 'zh' ? '帳號管理' : 'Accounts'}
+            </button>
+            <button
+              onClick={() => { setActiveTab('bugs'); setBugPage(1); }}
+              className={`flex-shrink-0 md:flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all whitespace-nowrap text-sm md:text-base
+              ${activeTab === 'bugs' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+            >
+              <MessageSquareWarning size={18} /> {t('admin_tab_bugs')}
             </button>
           </div>
         </div>
@@ -438,22 +617,22 @@ const AdminPage = () => {
 
               {/* 左：輸入隊員資料 */}
               <div className="w-full md:w-1/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100 sticky top-4">
-                <h2 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2">輸入隊員資料</h2>
+                <h2 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2">{t('admin_add_member')}</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">姓名</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_name')}</label>
                     <input
                       name="Name"
                       value={newFormData.Name}
                       onChange={handleNewFormChange}
                       className="w-full p-2 border rounded focus:border-purple-500 outline-none text-gray-800"
-                      placeholder="輸入姓名"
+                      placeholder={lang === 'zh' ? '輸入姓名' : 'Enter name'}
                     />
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Email</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_email')}</label>
                     <input
                       name="Email"
                       type="email"
@@ -465,19 +644,19 @@ const AdminPage = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">體重 (kg)</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_weight')}</label>
                     <input
                       name="Weight"
                       type="number"
                       value={newFormData.Weight}
                       onChange={handleNewFormChange}
                       className="w-full p-2 border rounded focus:border-purple-500 outline-none text-gray-800"
-                      placeholder="輸入體重"
+                      placeholder={lang === 'zh' ? '輸入體重' : 'Enter weight'}
                     />
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">划船位置</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_position')}</label>
                     <select
                       name="Position"
                       value={newFormData.Position}
@@ -491,7 +670,7 @@ const AdminPage = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">技術評分 (1-5)</label>
+                    <label className="text-sm text-gray-500 mb-1 block">{t('admin_skill')}</label>
                     <select
                       name="Skill_Rating"
                       value={newFormData.Skill_Rating}
@@ -504,138 +683,185 @@ const AdminPage = () => {
 
                   <button
                     onClick={handleAddUser}
-                    className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 mt-4 shadow-sm"
+                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 mt-4 shadow-sm"
                   >
-                    <Plus size={20} /> 新增
+                    <Plus size={20} /> {t('admin_add')}
                   </button>
                 </div>
               </div>
 
               {/* 右：已輸入的隊員資料 */}
               <div className="w-full md:w-2/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex justify-between items-center mb-4 border-b pb-2">
-                  <h2 className="text-lg font-bold text-gray-700">已輸入的隊員資料</h2>
-                  <span className="text-sm text-gray-400">共 {users.length} 人</span>
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 border-b pb-2 gap-4">
+                  <h2 className="text-lg font-bold text-gray-700 whitespace-nowrap">{t('admin_member_list')}</h2>
+
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* 搜尋欄位 */}
+                    <div className="relative flex-grow md:flex-grow-0 md:w-64">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full pl-10 p-2 outline-none placeholder-gray-400"
+                        placeholder="可輸入隊員姓名、Email 搜尋"
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setMemberPage(1); // Reset to first page on search
+                        }}
+                      />
+                    </div>
+
+                    <span className="text-sm text-gray-400 whitespace-nowrap">{t('admin_member_count').replace('{count}', filteredUsers.length)}</span>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {users.length === 0 ? (
-                    <p className="text-gray-400 text-center py-8">尚無資料</p>
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-gray-400 text-center py-8">{searchTerm ? '查無符合資料' : t('admin_no_members')}</p>
                   ) : (
-                    users.map((user) => {
-                      const isEditing = editingId === user.Name;
-                      const isExpanded = expandedId === user.Name;
-                      const showDetails = isEditing || isExpanded;
+                    <>
+                      {filteredUsers.slice((memberPage - 1) * 5, memberPage * 5).map((user) => {
+                        const isEditing = editingId === user.Name;
+                        const isExpanded = expandedId === user.Name;
+                        const showDetails = isEditing || isExpanded;
 
-                      return (
-                        <div key={user.Name} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-sm transition bg-white">
+                        return (
+                          <div key={user.Name} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-sm transition bg-white">
 
-                          <div className="flex items-center justify-between p-3 bg-gray-50">
-                            <div
-                              className="flex items-center gap-3 cursor-pointer select-none flex-1"
-                              onClick={() => toggleExpand(user.Name)}
-                            >
-                              {showDetails ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
-                              <span className="font-bold text-gray-800">{user.Name}</span>
+                            <div className="flex items-center justify-between p-3 bg-gray-50">
+                              <div
+                                className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                onClick={() => toggleExpand(user.Name)}
+                              >
+                                {showDetails ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
+                                <span className="font-bold text-gray-800">{user.Name}</span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition"
+                                  title="刪除"
+                                >
+                                  <MinusCircle size={18} />
+                                </button>
+
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-600 hover:text-white transition"
+                                  title="編輯"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition"
-                                title="刪除"
-                              >
-                                <MinusCircle size={18} />
-                              </button>
+                            {showDetails && (
+                              <div className="p-4 bg-white border-t border-gray-100 animate-fadeIn">
+                                {isEditing ? (
+                                  <div className="space-y-3">
+                                    <div className="text-sm text-purple-600 font-bold mb-2">正在編輯: {user.Name}</div>
 
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-600 hover:text-white transition"
-                                title="編輯"
-                              >
-                                <Edit size={16} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {showDetails && (
-                            <div className="p-4 bg-white border-t border-gray-100 animate-fadeIn">
-                              {isEditing ? (
-                                <div className="space-y-3">
-                                  <div className="text-sm text-purple-600 font-bold mb-2">正在編輯: {user.Name}</div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div>
-                                      <label className="text-xs text-gray-400">體重</label>
-                                      <input
-                                        name="Weight"
-                                        type="number"
-                                        value={editFormData.Weight}
-                                        onChange={handleEditChange}
-                                        className="w-full p-2 border rounded text-sm text-gray-800"
-                                      />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="text-xs text-gray-400">體重</label>
+                                        <input
+                                          name="Weight"
+                                          type="number"
+                                          value={editFormData.Weight}
+                                          onChange={handleEditChange}
+                                          className="w-full p-2 border rounded text-sm text-gray-800"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-xs text-gray-400">技術評分</label>
+                                        <select
+                                          name="Skill_Rating"
+                                          value={editFormData.Skill_Rating}
+                                          onChange={handleEditChange}
+                                          className="w-full p-2 border rounded text-sm bg-white text-gray-800"
+                                        >
+                                          {SKILL_OPTIONS.map(o => <option key={o} value={o}>Level {o}</option>)}
+                                        </select>
+                                      </div>
                                     </div>
+
                                     <div>
-                                      <label className="text-xs text-gray-400">技術評分</label>
+                                      <label className="text-xs text-gray-400">位置</label>
                                       <select
-                                        name="Skill_Rating"
-                                        value={editFormData.Skill_Rating}
+                                        name="Position"
+                                        value={editFormData.Position}
                                         onChange={handleEditChange}
                                         className="w-full p-2 border rounded text-sm bg-white text-gray-800"
                                       >
-                                        {SKILL_OPTIONS.map(o => <option key={o} value={o}>Level {o}</option>)}
+                                        {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                       </select>
                                     </div>
-                                  </div>
 
-                                  <div>
-                                    <label className="text-xs text-gray-400">位置</label>
-                                    <select
-                                      name="Position"
-                                      value={editFormData.Position}
-                                      onChange={handleEditChange}
-                                      className="w-full p-2 border rounded text-sm bg-white text-gray-800"
-                                    >
-                                      {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
+                                    <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100">
+                                      <button
+                                        onClick={handleCancelEdit}
+                                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                      <button
+                                        onClick={handleSaveEdit}
+                                        className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 shadow-md"
+                                      >
+                                        <Check size={16} />
+                                      </button>
+                                    </div>
                                   </div>
+                                ) : (
+                                  <div className="space-y-2 text-sm text-gray-600 pl-8 relative">
+                                    <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                    {user.Email && (
+                                      <p><span className="font-semibold text-gray-800 inline-block w-20">Email:</span> {user.Email}</p>
+                                    )}
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">體重:</span> {user.Weight} kg</p>
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">技術評分:</span> Level {user.Skill_Rating}</p>
+                                    <p>
+                                      <span className="font-semibold text-gray-800 inline-block w-20">位置:</span>
+                                      <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs ml-1">
+                                        {user.Position}
+                                      </span>
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
 
-                                  <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100">
-                                    <button
-                                      onClick={handleCancelEdit}
-                                      className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300"
-                                    >
-                                      <X size={16} />
-                                    </button>
-                                    <button
-                                      onClick={handleSaveEdit}
-                                      className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 shadow-md"
-                                    >
-                                      <Check size={16} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-2 text-sm text-gray-600 pl-8 relative">
-                                  <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                                  {user.Email && (
-                                    <p><span className="font-semibold text-gray-800 inline-block w-20">Email:</span> {user.Email}</p>
-                                  )}
-                                  <p><span className="font-semibold text-gray-800 inline-block w-20">體重:</span> {user.Weight} kg</p>
-                                  <p><span className="font-semibold text-gray-800 inline-block w-20">技術評分:</span> Level {user.Skill_Rating}</p>
-                                  <p>
-                                    <span className="font-semibold text-gray-800 inline-block w-20">位置:</span>
-                                    <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs ml-1">
-                                      {user.Position}
-                                    </span>
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                      {/* Pagination Controls */}
+                      {users.length > 5 && (
+                        <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
+                          <span className="text-sm text-gray-500">
+                            {t('admin_page_info').replace('{current}', memberPage).replace('{total}', Math.ceil(filteredUsers.length / 5))}
+                          </span>
+                          <button
+                            onClick={() => setMemberPage(p => Math.max(1, p - 1))}
+                            disabled={memberPage === 1}
+                            className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                          >
+                            {t('admin_prev')}
+                          </button>
+                          <button
+                            onClick={() => setMemberPage(p => Math.min(Math.ceil(filteredUsers.length / 5), p + 1))}
+                            disabled={memberPage >= Math.ceil(filteredUsers.length / 5)}
+                            className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                          >
+                            {t('admin_next')}
+                          </button>
                         </div>
-                      );
-                    })
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -841,10 +1067,10 @@ const AdminPage = () => {
                     從隊員資料中選擇成員並指定權限角色
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full">隊員</span>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">幹部</span>
-                  <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full">管理員</span>
+                <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-shrink-0">
+                  <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-600 rounded-full whitespace-nowrap">隊員</span>
+                  <span className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 rounded-full whitespace-nowrap">幹部</span>
+                  <span className="px-2 sm:px-3 py-1 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap">管理員</span>
                 </div>
               </div>
 
@@ -863,12 +1089,12 @@ const AdminPage = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 text-gray-600">
-                      <th className="text-left p-3 font-medium">姓名</th>
-                      <th className="text-left p-3 font-medium">Email</th>
-                      <th className="text-left p-3 font-medium">目前權限</th>
-                      <th className="text-center p-3 font-medium">權限指派</th>
-                      <th className="text-center p-3 font-medium">操作</th>
+                    <tr className="bg-gray-50 text-gray-600 text-xs sm:text-sm">
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">姓名</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Email</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">目前權限</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">權限指派</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -879,9 +1105,9 @@ const AdminPage = () => {
                         </td>
                       </tr>
                     ) : (
-                      users.map((member) => {
+                      users.slice((rolePage - 1) * 5, rolePage * 5).map((member) => {
                         // 查找該隊員是否已有系統帳號
-                        const authUser = authUsers.find(a => a.email === member.Email);
+                        const authUser = authUsers.find(a => a.email?.toLowerCase() === member.Email?.toLowerCase());
                         const currentRole = authUser?.role || 'member';
 
                         return (
@@ -933,8 +1159,8 @@ const AdminPage = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="p-3">
-                              <span className={`text-xs px-2 py-1 rounded-full ${currentRole === 'admin' ? 'bg-purple-100 text-purple-700' :
+                            <td className="p-2 sm:p-3">
+                              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap ${currentRole === 'admin' ? 'bg-purple-100 text-purple-700' :
                                 currentRole === 'management' ? 'bg-blue-100 text-blue-700' :
                                   'bg-gray-100 text-gray-600'
                                 }`}>
@@ -983,12 +1209,12 @@ const AdminPage = () => {
                                     Swal.fire({ icon: 'success', title: '權限已更新', timer: 1500, showConfirmButton: false });
                                   }
                                 }}
-                                className="px-3 py-1.5 border rounded-lg bg-white text-gray-800 text-sm focus:ring-2 focus:ring-emerald-200"
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 border rounded-lg bg-white text-gray-800 text-[10px] sm:text-sm focus:ring-2 focus:ring-emerald-200"
                                 disabled={!member.Email}
                               >
-                                <option value="member">隊員 (Member)</option>
-                                <option value="management">幹部 (Management)</option>
-                                <option value="admin">管理員 (Admin)</option>
+                                <option value="member">隊員</option>
+                                <option value="management">幹部</option>
+                                <option value="admin">管理員</option>
                               </select>
                             </td>
                             <td className="p-3 text-center">
@@ -1030,8 +1256,166 @@ const AdminPage = () => {
                     )}
                   </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                {users.length > 5 && (
+                  <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
+                    <span className="text-sm text-gray-500">
+                      第 {rolePage} / {Math.ceil(users.length / 5)} 頁
+                    </span>
+                    <button
+                      onClick={() => setRolePage(p => Math.max(1, p - 1))}
+                      disabled={rolePage === 1}
+                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                    >
+                      ← 上一頁
+                    </button>
+                    <button
+                      onClick={() => setRolePage(p => Math.min(Math.ceil(users.length / 5), p + 1))}
+                      disabled={rolePage >= Math.ceil(users.length / 5)}
+                      className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
+                    >
+                      下一頁 →
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==================== 5. Bug修復記錄 Tab ==================== */}
+        {activeTab === 'bugs' && (
+          <div className="bg-white rounded-xl shadow-lg border border-rose-100 overflow-hidden animate-fade-in-up max-w-full">
+            <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <MessageSquareWarning className="text-rose-500" /> Bug 回報列表
+              </h2>
+              <button onClick={loadBugReports} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <RefreshCw size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* Mobile hint */}
+            <div className="md:hidden px-4 py-2 bg-gray-50 text-xs text-gray-500 flex items-center gap-1 border-b">
+              👆 左右滑動查看更多
+            </div>
+
+            <div className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <table className="w-full text-left" style={{ minWidth: '800px' }}>
+                <thead className="bg-gray-50 text-gray-600 text-xs md:text-sm font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">狀態</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報日期</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報者</th>
+                    <th className="p-3 md:p-4 border-b">描述</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">截圖</th>
+                    <th className="p-3 md:p-4 border-b text-right whitespace-nowrap">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {bugs.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="p-8 text-center text-gray-400">
+                        目前沒有 Bug 回報 🎉
+                      </td>
+                    </tr>
+                  ) : (
+                    bugs.slice((bugPage - 1) * 5, bugPage * 5).map((bug) => (
+                      <tr key={bug.id} className="hover:bg-gray-50 transition">
+                        <td className="p-3 md:p-4">
+                          <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1
+                          ${bug.is_fixed ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {bug.is_fixed ? <Check size={12} /> : <MessageSquareWarning size={12} />}
+                            {bug.is_fixed ? '已修復' : '待處理'}
+                          </span>
+                        </td>
+                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-600 whitespace-nowrap">
+                          {new Date(bug.created_at).toLocaleDateString()}
+                          <div className="text-xs text-gray-400">{new Date(bug.created_at).toLocaleTimeString()}</div>
+                        </td>
+                        <td className="p-3 md:p-4 text-xs md:text-sm font-medium text-gray-800">
+                          <div className="truncate max-w-[120px] md:max-w-none">{bug.reporter_name}</div>
+                          <div className="text-xs text-gray-400 truncate max-w-[120px] md:max-w-none">{bug.reporter_email}</div>
+                        </td>
+                        <td className="p-3 md:p-4 text-xs md:text-sm text-gray-700 max-w-[200px]">
+                          {bug.description && bug.description.length > 50 ? (
+                            <div>
+                              <span className={expandedBugId === bug.id ? '' : 'line-clamp-2'}>
+                                {bug.description}
+                              </span>
+                              <button
+                                onClick={() => setExpandedBugId(expandedBugId === bug.id ? null : bug.id)}
+                                className="text-blue-600 hover:underline text-xs ml-1 whitespace-nowrap"
+                              >
+                                {expandedBugId === bug.id ? '收起' : '顯示更多'}
+                              </button>
+                            </div>
+                          ) : (
+                            bug.description
+                          )}
+                        </td>
+                        <td className="p-3 md:p-4">
+                          {bug.screenshot_url ? (
+                            <a
+                              href={bug.screenshot_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-blue-600 hover:underline text-xs md:text-sm font-medium whitespace-nowrap"
+                            >
+                              <ImageIcon size={14} /> 截圖 <ExternalLink size={10} />
+                            </a>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">無</span>
+                          )}
+                        </td>
+                        <td className="p-3 md:p-4 text-right">
+                          <label className="flex items-center justify-end cursor-pointer gap-1 md:gap-2">
+                            <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">{bug.is_fixed ? '未修復' : '已修復'}</span>
+                            <input
+                              type="checkbox"
+                              checked={bug.is_fixed}
+                              onChange={() => handleToggleBugStatus(bug.id, bug.is_fixed)}
+                              className="w-4 h-4 md:w-5 md:h-5 text-green-600 rounded focus:ring-green-500 border-gray-300 cursor-pointer"
+                            />
+                          </label>
+                          {bug.is_fixed && bug.fixed_at && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {new Date(bug.fixed_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {bugs.length > 5 && (
+              <div className="p-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
+                <span className="text-sm text-gray-500">
+                  共 {bugs.length} 筆，第 {bugPage} / {Math.ceil(bugs.length / 5)} 頁
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setBugPage(p => Math.max(1, p - 1))}
+                    disabled={bugPage === 1}
+                    className="px-4 py-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-100 transition"
+                  >
+                    ← 上一頁
+                  </button>
+                  <button
+                    onClick={() => setBugPage(p => Math.min(Math.ceil(bugs.length / 5), p + 1))}
+                    disabled={bugPage >= Math.ceil(bugs.length / 5)}
+                    className="px-4 py-2 rounded-lg bg-rose-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-600 transition"
+                  >
+                    下一頁 →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

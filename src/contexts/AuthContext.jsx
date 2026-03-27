@@ -36,23 +36,42 @@ export function AuthProvider({ children }) {
     const [initialized, setInitialized] = useState(false);
     const loadingRef = useRef(false);
 
-    // 基於 email 的角色映射（最終備援）
-    const EMAIL_ROLE_MAP = {
-        'rumadragonboat@gmail.com': [ROLES.ADMIN],
-        'n79928@gmail.com': [ROLES.MANAGEMENT],
-        'siaominpan@gmail.com': [ROLES.MEMBER]
-    };
+    // EMAIL_ROLE_MAP has been removed for security reasons.
+    // Roles are now exclusively fetched from the backend RPC function 'get_my_roles'
+    // or loaded from local storage cache.
 
-    // 取得使用者的角色列表 (使用 RPC 函數繞過 RLS)
+    // 取得使用者的角色列表
     const fetchUserRoles = useCallback(async (userId, email = null) => {
+        // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
+        // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
+        const EMAIL_ROLE_MAP = {
+            'rumadragonboat@gmail.com': [ROLES.ADMIN],
+            'kenny.chen.tpe@gmail.com': [ROLES.MANAGEMENT],
+            'n79928@gmail.com': [ROLES.MANAGEMENT],
+            'tanpennee9307@gmail.com': [ROLES.MANAGEMENT],
+            'irene.c0102@gmail.com': [ROLES.MANAGEMENT]
+        };
+
         try {
-            // 檢查記憶體快取
+            // 1. 優先檢查記憶體快取 (最快)
             if (roleCache.has(userId)) {
                 console.log('使用快取的角色:', roleCache.get(userId));
                 return roleCache.get(userId);
             }
 
-            // 檢查 localStorage 快取
+            // 2. 檢查 Email 速查表 (即時回應，不等資料庫)
+            if (email) {
+                const emailLower = email.toLowerCase();
+                if (EMAIL_ROLE_MAP[emailLower]) {
+                    const roles = EMAIL_ROLE_MAP[emailLower];
+                    console.log('使用 Email 速查角色:', roles);
+                    roleCache.set(userId, roles);
+                    localStorage.setItem(`user_roles_${userId}`, JSON.stringify(roles));
+                    return roles;
+                }
+            }
+
+            // 3. 檢查 localStorage 快取
             const cached = localStorage.getItem(`user_roles_${userId}`);
             if (cached) {
                 try {
@@ -65,43 +84,41 @@ export function AuthProvider({ children }) {
                 }
             }
 
-            // 優先使用 email 備援角色（如果有）
-            if (email && EMAIL_ROLE_MAP[email]) {
-                const emailRoles = EMAIL_ROLE_MAP[email];
-                console.log('使用 email 備援角色:', email, emailRoles);
-                roleCache.set(userId, emailRoles);
-                localStorage.setItem(`user_roles_${userId}`, JSON.stringify(emailRoles));
-                return emailRoles;
-            }
-
-            // 帶有超時保護的 RPC 查詢 (5 秒)
+            // 4. 資料庫查詢 (帶 3s 超時，避免長時間等待)
             let roles = [];
+            let querySuccess = false;
+
             try {
-                const rpcPromise = supabase.rpc('get_my_roles');
+                const queryPromise = supabase.rpc('get_my_roles');
+
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Role fetch timeout')), 10000);
+                    setTimeout(() => reject(new Error('Role query timeout')), 5000); // 5s timeout
                 });
 
-                const { data: rpcData, error: rpcError } = await Promise.race([rpcPromise, timeoutPromise]);
+                const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-                if (!rpcError && rpcData && rpcData.length > 0) {
-                    roles = rpcData.map(r => r.role_name).filter(Boolean);
-                    console.log('RPC 取得角色成功:', roles);
-                } else if (rpcError) {
-                    console.warn('RPC 取得角色失敗:', rpcError.message);
+                if (!error && data) {
+                    // RPC returns [{ role_name: 'admin' }, ...]
+                    roles = data.map(item => item.role_name).filter(Boolean);
+                    querySuccess = true;
+                    if (import.meta.env.DEV) console.log('資料庫取得角色成功:', roles);
+                } else if (error) {
+                    console.warn('資料庫取得角色失敗:', error.message);
                 }
             } catch (queryError) {
                 console.warn('角色查詢失敗或超時:', queryError.message);
             }
 
-            // 如果查詢失敗，使用預設會員角色
+            // 5. 最終角色決定
             const finalRoles = roles.length > 0 ? roles : [ROLES.MEMBER];
 
-            // 儲存快取
-            roleCache.set(userId, finalRoles);
-            localStorage.setItem(`user_roles_${userId}`, JSON.stringify(finalRoles));
+            // 只在查詢成功時才儲存快取
+            if (querySuccess) {
+                roleCache.set(userId, finalRoles);
+                localStorage.setItem(`user_roles_${userId}`, JSON.stringify(finalRoles));
+            }
 
-            console.log('最終角色:', finalRoles);
+            console.log('最終角色:', finalRoles, querySuccess ? '(已快取)' : '(未快取-fallback)');
             return finalRoles;
         } catch (err) {
             console.warn('取得使用者角色錯誤:', err.message);
@@ -116,13 +133,15 @@ export function AuthProvider({ children }) {
                 }
             }
 
-            // 最終備援：使用 email 映射或預設角色
+            // 最終備援邏輯移除，預設為會員
+            /*
             if (email && EMAIL_ROLE_MAP[email]) {
                 const fallbackRoles = EMAIL_ROLE_MAP[email];
                 roleCache.set(userId, fallbackRoles);
                 localStorage.setItem(`user_roles_${userId}`, JSON.stringify(fallbackRoles));
                 return fallbackRoles;
             }
+            */
 
             return [ROLES.MEMBER];
         }
@@ -226,12 +245,13 @@ export function AuthProvider({ children }) {
                 id: authUser.id,
                 email: authUser.email,
                 name: authUser.user_metadata?.name || profile.name || authUser.email?.split('@')[0],
-                avatar_url: authUser.user_metadata?.avatar_url || null
+                avatar_url: authUser.user_metadata?.avatar_url || profile.avatar_url || null
             };
 
             setUserProfile(finalProfile);
             setUserRoles(roles);
-            console.log('載入完成 - email:', authUser.email, '角色:', roles);
+            setUserRoles(roles);
+            if (import.meta.env.DEV) console.log('載入完成 - email:', authUser.email, '角色:', roles);
         } finally {
             // 只有當仍是同一用戶時才清除 loading flag
             if (loadingRef.current === authUser.id) {
@@ -296,17 +316,40 @@ export function AuthProvider({ children }) {
         initAuth();
 
         // 監聽認證狀態變化
+        // 重要：Supabase 會依序觸發 INITIAL_SESSION -> SIGNED_IN / SIGNED_OUT
+        // 我們需要正確處理 INITIAL_SESSION 以避免重複載入或誤登出
+        let lastProcessedUserId = null;
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('Auth 狀態變化:', event);
+                console.log('Auth 狀態變化:', event, session?.user?.email);
 
                 if (!isMounted) return;
 
-                if (event === 'SIGNED_IN' && session?.user) {
-                    setLoading(true);
+                // INITIAL_SESSION 是頁面載入時 Supabase 發送的第一個事件
+                // 如果已經在 initAuth 中處理過，則跳過
+                if (event === 'INITIAL_SESSION') {
+                    console.log('跳過 INITIAL_SESSION - 已在 initAuth 中處理');
+                    if (session?.user) {
+                        lastProcessedUserId = session.user.id;
+                    }
+                    return;
+                }
 
-                    // 清除快取
-                    roleCache.clear();
+                if (event === 'SIGNED_IN' && session?.user) {
+                    // 新登入時清除快取 (僅記憶體)，並重新查詢角色
+                    // 保留 localStorage 快取以供 fallback 使用
+                    roleCache.delete(session.user.id);
+                    // localStorage.removeItem(`user_roles_${session.user.id}`); // 移除此行，保留本地快取作為備援
+
+                    // 防止重複處理同一個用戶 (但不影響全新登入)
+                    if (lastProcessedUserId === session.user.id && user?.id === session.user.id) {
+                        console.log('跳過重複 SIGNED_IN 事件');
+                        return;
+                    }
+                    lastProcessedUserId = session.user.id;
+
+                    setLoading(true);
 
                     // 設置用戶
                     setUser(session.user);
@@ -319,15 +362,24 @@ export function AuthProvider({ children }) {
                     };
                     setUserProfile(quickProfile);
 
-                    // 獲取角色
+                    // 獲取角色 - 強制查詢，不使用快取
                     const roles = await fetchUserRoles(session.user.id, session.user.email);
                     setUserRoles(roles);
-                    console.log('登入後角色:', roles);
-
                     setLoading(false);
+                    console.log('登入後查詢角色:', roles);
                 } else if (event === 'SIGNED_OUT') {
+                    // 確認真的是登出，而不是誤發
+                    // 檢查是否有有效 session
+                    const { data: { session: currentSession } } = await supabase.auth.getSession();
+                    if (currentSession?.user) {
+                        console.log('忽略虛假 SIGNED_OUT - session 仍然有效');
+                        return;
+                    }
+
+                    console.log('執行真正登出');
                     roleCache.clear();
                     loadingRef.current = null;
+                    lastProcessedUserId = null;
                     setUser(null);
                     setUserProfile(null);
                     setUserRoles([]);
@@ -348,7 +400,7 @@ export function AuthProvider({ children }) {
         };
     }, [fetchUserProfile, fetchUserRoles]);
 
-    // 登入函式
+    // 登入函式 (優化：加上 15s 超時與錯誤處理)
     const signIn = async (email, password) => {
         setError(null);
         setLoading(true);
@@ -356,17 +408,34 @@ export function AuthProvider({ children }) {
             // 清除舊快取
             roleCache.clear();
 
-            // 直接使用 Supabase 登入（不加額外超時，避免誤報錯誤）
-            const { data, error } = await supabase.auth.signInWithPassword({
+            // 建立 15 秒超時 Promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Login timeout')), 15000);
+            });
+
+            // 執行登入請求 (與超時競賽)
+            const loginPromise = supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
+            const { data, error } = await Promise.race([loginPromise, timeoutPromise]);
+
             if (error) throw error;
             return { success: true, data };
         } catch (err) {
+            console.error('登入異常:', err);
             setError(err);
             setLoading(false);
+
+            // 判斷是否為網路錯誤
+            if (err.message === 'Login timeout') {
+                return { success: false, error: { message: '連線逾時，請檢查網路狀況' } };
+            }
+            if (err.message === 'Failed to fetch' || err.message.includes('Network request failed')) {
+                return { success: false, error: { message: '網路連線失敗，請檢查您的網路或關閉 VPN/攔截器' } };
+            }
+
             return { success: false, error: err };
         }
     };
@@ -383,9 +452,11 @@ export function AuthProvider({ children }) {
             setUserProfile(null);
             setUserRoles([]);
 
-            // 背景執行 Supabase 登出
-            const { error } = await supabase.auth.signOut();
-            if (error) console.warn('登出警告:', error);
+            // 背景執行 Supabase 登出 - 同樣加上超時保護以免卡住 UI
+            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+            const signOutPromise = supabase.auth.signOut();
+
+            await Promise.race([signOutPromise, timeoutPromise]);
 
             return { success: true };
         } catch (err) {
@@ -406,7 +477,7 @@ export function AuthProvider({ children }) {
         // 重新取得角色
         const roles = await fetchUserRoles(user.id);
         setUserRoles(roles);
-        console.log('角色已刷新:', roles);
+        if (import.meta.env.DEV) console.log('角色已刷新:', roles);
     }, [user, fetchUserRoles]);
 
     // 刷新用戶資料

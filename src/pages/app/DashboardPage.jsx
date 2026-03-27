@@ -4,72 +4,159 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import AppLayout from '../../components/AppLayout';
-import { supabase } from '../../lib/supabase';
-import { fetchActivities } from '../../api/supabaseApi';
+import { fetchActivities, fetchAttendance, fetchUserPoints } from '../../api/supabaseApi';
 
 export default function DashboardPage() {
     const { userProfile, userRoles, isManagement, isAdmin } = useAuth();
+    const { lang, t } = useLanguage();
     const navigate = useNavigate();
     const [memberName, setMemberName] = useState(null);
     const [stats, setStats] = useState({ totalPoints: 0, monthlyPractices: 0, currentStreak: 0, rank: '-' });
     const [upcomingActivities, setUpcomingActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // 載入資料
+    // 載入所有資料 — 單一 useEffect，平行化所有 API 呼叫
     useEffect(() => {
-        const loadData = async () => {
+        const loadAll = async () => {
             setLoading(true);
             try {
-                // 載入活動
-                const activities = await fetchActivities();
+                // 平行載入所有資料 (取代兩個分開的 useEffect + 減少重複呼叫)
+                const [activities, pointsResult, allAttendance] = await Promise.all([
+                    fetchActivities(),          // 呼叫一次，同時用於近期活動 + 統計計算
+                    fetchUserPoints(),           // M 點
+                    fetchAttendance(),           // 出席紀錄 (用於排名 + 連續出席)
+                ]);
+
+                // === 近期活動 ===
                 const now = new Date();
                 const upcoming = (activities || [])
                     .filter(a => new Date(a.date) >= now)
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .slice(0, 3)
                     .map(a => ({
-                        date: new Date(a.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short' }),
-                        time: a.start_time || '待定',
+                        date: new Date(a.date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US', { month: 'numeric', day: 'numeric', weekday: 'short' }),
+                        time: a.start_time || t('app_tbd'),
                         type: a.name,
-                        location: a.location || '待定'
+                        location: a.location || t('app_tbd')
                     }));
                 setUpcomingActivities(upcoming);
+
+                // === 統計數據 (需要 userProfile) ===
+                if (userProfile?.email && userProfile?.name) {
+                    // 直接使用 userProfile.name，不需要額外查 members 表
+                    const targetName = userProfile.name;
+                    const currentYear = now.getFullYear();
+                    const currentMonth = now.getMonth() + 1;
+
+                    // (A) 本月練習次數
+                    const myRecords = (allAttendance || []).filter(r => r.Name === targetName);
+                    const monthlyCount = myRecords.filter(r => {
+                        const d = new Date(r.Date.replace(/\//g, '-'));
+                        return d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth;
+                    }).length;
+
+                    // (B) 本月排名
+                    const boardMap = {};
+                    (allAttendance || []).forEach(r => {
+                        const d = new Date(r.Date.replace(/\//g, '-'));
+                        if (d.getFullYear() === currentYear && (d.getMonth() + 1) === currentMonth) {
+                            boardMap[r.Name] = (boardMap[r.Name] || 0) + 1;
+                        }
+                    });
+                    const sortedBoard = Object.entries(boardMap)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([name, count]) => ({ name, count }));
+                    const myRankIndex = sortedBoard.findIndex(item => item.name === targetName);
+                    const myRank = (myRankIndex !== -1 && monthlyCount > 0) ? myRankIndex + 1 : '-';
+
+                    // (C) 連續出席
+                    const pastPractices = (activities || [])
+                        .filter(a => a.type === 'boat_practice' && new Date(a.date) < now)
+                        .map(a => a.date.split('(')[0].replace(/\//g, '-'))
+                        .sort((a, b) => new Date(b) - new Date(a));
+                    const myAttendedDates = new Set(myRecords.map(r => r.Date.split('(')[0].replace(/\//g, '-')));
+                    let streak = 0;
+                    for (const practiceDate of pastPractices) {
+                        if (myAttendedDates.has(practiceDate)) { streak++; } else { break; }
+                    }
+
+                    setStats({
+                        totalPoints: pointsResult?.totalPoints || 0,
+                        monthlyPractices: monthlyCount,
+                        currentStreak: streak,
+                        rank: myRank,
+                        totalPractices: myRecords.length
+                    });
+                } else {
+                    setStats(prev => ({ ...prev, totalPoints: pointsResult?.totalPoints || 0 }));
+                }
             } catch (error) {
-                console.error('Load error:', error);
+                console.error('Dashboard load error:', error);
             } finally {
                 setLoading(false);
             }
         };
-        loadData();
-    }, []);
-
-    // 嘗試從 members 表取得真實姓名
-    useEffect(() => {
-        const fetchMemberName = async () => {
-            if (!userProfile?.email) return;
-
-            const { data } = await supabase
-                .from('members')
-                .select('name, display_name')
-                .eq('email', userProfile.email)
-                .maybeSingle();
-
-            if (data) {
-                setMemberName(data.display_name || data.name);
-            }
-        };
-
-        fetchMemberName();
-    }, [userProfile]);
+        loadAll();
+    }, [userProfile, lang]);
 
     // 取得顯示名稱：優先使用 members 表的名字
-    const displayName = memberName || userProfile?.name || '划手';
+    const displayName = memberName || userProfile?.name || (lang === 'zh' ? '划手' : 'Paddler');
+
+    // 徽章系統邏輯 (Badge System Logic)
+    const getBadgeInfo = (count) => {
+        const isEn = lang !== 'zh';
+        if (count <= 10) {
+            return {
+                img: '/L1.png',
+                title: isEn ? 'Chill Ambassador' : '',
+                text: isEn
+                    ? "\"Showing up to paddle is fate. Staying home is 'spiritual practice.' My attendance vibe is chill, but my love for RUMA is REAL. 💖\""
+                    : '來划船是緣分，沒來是修行，出席率隨緣，但對RUMA的愛是真的💖'
+            };
+        } else if (count <= 20) {
+            return {
+                img: '/L2.png',
+                title: isEn ? 'The Accidental Hero' : '',
+                text: isEn
+                    ? "\"Blistered palms, raw butt... It's too late to turn back now. I'm finishing this session even if I have to do it on my knees. 💪\""
+                    : '就算屁股磨破皮、手掌起水泡，回頭已經太遠，跪著也要划完💪'
+            };
+        } else if (count < 30) {
+            return {
+                img: '/L3.png',
+                title: isEn ? 'Hardcore Addict' : '',
+                text: isEn
+                    ? "\"My hands shake on rest days. I get the urge to paddle in any body of water I see. There's no cure. Lactic acid is my only therapy now. 🔥\""
+                    : '一天不划船手會抖，看到水池就想插槳，沒藥醫了，只好繼續用乳酸來治療我的熱血🔥'
+            };
+        } else {
+            return {
+                img: '/L4.png',
+                title: isEn ? 'The Cyborg' : '',
+                text: isEn
+                    ? "\"Pain receptors: Offline. River water flows through my veins now. Maximum respect dude. 🙇‍♂️\""
+                    : '酸痛神經元已麻痺，血液裡流的是碧潭的水，請受小的一拜🙇‍♂️'
+            };
+        }
+    };
+
+    const currentBadge = getBadgeInfo(stats.totalPractices || 0);
 
     // 徽章資料（未來可從資料庫讀取）
     const recentBadges = [
-        { emoji: '🚣', name: '新手啟航' },
+        { emoji: '🚣', name: t('dash_badge_newbie') },
     ];
+
+    // Role display helper
+    const getRoleLabel = (role) => {
+        switch (role) {
+            case 'admin': return t('role_admin');
+            case 'management': return t('role_management');
+            default: return t('role_member');
+        }
+    };
 
     return (
         <AppLayout>
@@ -94,10 +181,10 @@ export default function DashboardPage() {
                             {/* 歡迎文字 */}
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-                                    歡迎回來，{displayName}
+                                    {t('dash_welcome')}{displayName}
                                 </h1>
                                 <p className="text-gray-500 mt-1">
-                                    今天也要努力練習！
+                                    {t('dash_today_msg')}
                                 </p>
                                 <div className="flex flex-wrap gap-2 mt-3">
                                     {userRoles.map(role => (
@@ -110,7 +197,7 @@ export default function DashboardPage() {
                                                     : 'bg-sky-100 text-sky-700'
                                                 }`}
                                         >
-                                            {role === 'admin' ? '管理員' : role === 'management' ? '幹部' : '隊員'}
+                                            {getRoleLabel(role)}
                                         </span>
                                     ))}
                                 </div>
@@ -119,15 +206,15 @@ export default function DashboardPage() {
                         <div className="flex flex-col sm:flex-row gap-3">
                             <Link
                                 to="/app/journey/upload"
-                                className="px-5 py-3 bg-orange-500 text-white font-bold rounded-xl shadow hover:bg-orange-600 transition text-center flex items-center justify-center gap-2"
+                                className="px-4 py-3 bg-orange-500 text-white font-bold rounded-xl shadow hover:bg-orange-600 transition text-center flex items-center justify-center gap-2 text-sm md:text-base whitespace-nowrap"
                             >
-                                📸 上傳自主訓練紀錄
+                                {t('dash_upload_training')}
                             </Link>
                             <Link
                                 to="/app/practice"
-                                className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl shadow hover:bg-sky-700 transition text-center"
+                                className="px-4 py-3 bg-sky-600 text-white font-bold rounded-xl shadow hover:bg-sky-700 transition text-center text-sm md:text-base whitespace-nowrap"
                             >
-                                立即報名活動 →
+                                {t('dash_register_now')}
                             </Link>
                         </div>
                     </div>
@@ -135,36 +222,36 @@ export default function DashboardPage() {
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow p-4 text-center">
+                    <Link to="/app/points" className="bg-white rounded-xl shadow p-4 text-center hover:shadow-md transition-shadow cursor-pointer block">
                         <div className="text-3xl font-bold text-sky-600">{stats.totalPoints}</div>
-                        <div className="text-gray-500 text-sm mt-1">累積M點</div>
-                    </div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_total_points')}</div>
+                    </Link>
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-green-600">{stats.monthlyPractices}</div>
-                        <div className="text-gray-500 text-sm mt-1">本月練習</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_monthly_practice')}</div>
                     </div>
                     <div className="bg-white rounded-xl shadow p-4 text-center">
                         <div className="text-3xl font-bold text-orange-500">{stats.currentStreak}</div>
-                        <div className="text-gray-500 text-sm mt-1">連續週出席</div>
+                        <div className="text-gray-500 text-sm mt-1">{t('dash_streak')}</div>
                     </div>
-                    <div className="bg-white rounded-xl shadow p-4 text-center">
+                    <Link to="/app/announcements" className="bg-white rounded-xl shadow p-4 text-center hover:shadow-md transition-shadow cursor-pointer block">
                         <div className="text-3xl font-bold text-purple-600">{stats.rank === '-' ? '-' : `#${stats.rank}`}</div>
-                        <div className="text-gray-500 text-sm mt-1">月度排名</div>
-                    </div>
+                        <div className="text-gray-500 text-sm mt-1">{lang === 'zh' ? '本月風雲榜排名' : 'Monthly Billboard Rank'}</div>
+                    </Link>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* 近期活動 */}
                     <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">📅 近期開放報名活動</h2>
+                            <h2 className="text-xl font-bold text-gray-800">{t('dash_upcoming')}</h2>
                             <Link to="/app/calendar" className="text-sky-600 hover:underline text-sm">
-                                查看全部 →
+                                {t('app_view_all')}
                             </Link>
                         </div>
                         <div className="space-y-3">
                             {loading ? (
-                                <div className="text-center text-gray-400 py-6">載入中...</div>
+                                <div className="text-center text-gray-400 py-6">{t('app_loading')}</div>
                             ) : upcomingActivities.length > 0 ? (
                                 upcomingActivities.map((practice, index) => (
                                     <div
@@ -185,38 +272,38 @@ export default function DashboardPage() {
                                             onClick={() => navigate('/app/practice')}
                                             className="px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-lg hover:bg-sky-700 transition"
                                         >
-                                            報名
+                                            {t('app_register')}
                                         </button>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-gray-400 py-6">目前無開放報名的活動</div>
+                                <div className="text-center text-gray-400 py-6">{t('dash_no_activities')}</div>
                             )}
                         </div>
                     </div>
 
-                    {/* 我的M點及U幣 */}
-                    <div className="bg-white rounded-2xl shadow-lg p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">🏆 我的M點及U幣</h2>
-                            <Link to="/app/points" className="text-sky-600 hover:underline text-sm">
-                                查看全部 →
-                            </Link>
+                    {/* 我的龍舟界稱號 (My RUMA Titles) */}
+
+                    <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col h-full">
+                        <div className="flex justify-center items-center mb-4">
+                            <h2 className="text-xl font-bold text-gray-800">{lang === 'zh' ? '我的龍舟界稱號' : 'My RUMA Titles'}</h2>
                         </div>
-                        <div className="space-y-3">
-                            {recentBadges.length > 0 ? (
-                                recentBadges.map((badge, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-                                    >
-                                        <span className="text-3xl">{badge.emoji}</span>
-                                        <span className="font-medium text-gray-700">{badge.name}</span>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-400 py-6">尚無徽章</div>
+
+                        {/* 稱號徽章展示區 */}
+                        <div className="flex-grow flex flex-col items-center justify-center p-4 text-center">
+                            <div className="mb-6">
+                                <img
+                                    src={currentBadge.img}
+                                    alt="User Badge"
+                                    className="w-48 h-48 object-contain mx-auto transform hover:scale-105 transition-transform duration-300"
+                                />
+                            </div>
+                            {currentBadge.title && (
+                                <h3 className="text-2xl font-bold text-gray-800 mb-3 font-outfit">{currentBadge.title}</h3>
                             )}
+                            <p className="text-gray-600 text-base font-medium leading-relaxed px-2 whitespace-pre-line">
+                                {currentBadge.text}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -226,3 +313,4 @@ export default function DashboardPage() {
         </AppLayout>
     );
 }
+

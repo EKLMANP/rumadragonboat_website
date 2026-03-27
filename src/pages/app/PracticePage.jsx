@@ -4,25 +4,28 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter } from 'lucide-react';
-import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations } from '../../api/supabaseApi';
+import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter, ChevronDown } from 'lucide-react';
+import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations, fetchSeatingArrangements } from '../../api/supabaseApi';
 import { generateSeating } from '../../utils/seatingLogic';
 import SeatVisualizer from '../../components/SeatVisualizer';
 import AppLayout from '../../components/AppLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // 活動類別定義
 const ACTIVITY_CATEGORIES = [
-    { value: 'boat_practice', label: '船練', color: 'bg-blue-500' },
-    { value: 'team_building', label: 'Team Building', color: 'bg-green-500' },
-    { value: 'race', label: '龍舟比賽', color: 'bg-red-500' },
-    { value: 'internal_competition', label: '內部競賽', color: 'bg-purple-500' }
+    { value: 'all', label_zh: 'All', label_en: 'All', color: 'bg-gray-500' },
+    { value: 'boat_practice', label_zh: '船練', label_en: 'Boat Practice', color: 'bg-blue-500' },
+    { value: 'team_building', label_zh: 'Team Building', label_en: 'Team Building', color: 'bg-green-500' },
+    { value: 'race', label_zh: '龍舟比賽', label_en: 'Race', color: 'bg-red-500' },
+    { value: 'internal_competition', label_zh: '內部競賽', label_en: 'Internal', color: 'bg-purple-500' }
 ];
 
 export default function PracticePage() {
     const { userProfile, user } = useAuth();
     const location = useLocation();
+    const { t, lang } = useLanguage();
 
     // 狀態
     const [users, setUsers] = useState([]);
@@ -30,15 +33,214 @@ export default function PracticePage() {
     const [registrations, setRegistrations] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [activityPage, setActivityPage] = useState(1); // Add pagination state
 
     // 表單狀態
-    const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all'); // Default to All
     const [selectedActivities, setSelectedActivities] = useState([]);
 
     // Legacy data for seating chart
     const [practiceSessions, setPracticeSessions] = useState([]);
-    const [allRegs, setAllRegs] = useState([]);
+    const [allRegs, setAllRegs] = useState([]); // Raw registration data for auto-generation
     const [openDates, setOpenDates] = useState([]);
+
+    // Seating Chart State
+    const [seatingDate, setSeatingDate] = useState('');
+    const [seatingData, setSeatingData] = useState(null);
+    const [seatingLoading, setSeatingLoading] = useState(false);
+    const [availableSeatingDates, setAvailableSeatingDates] = useState([]);
+
+    // Load seating data when date changes
+    useEffect(() => {
+        if (seatingDate) {
+            loadSeatingForDate(seatingDate);
+        }
+    }, [seatingDate]);
+
+    const loadSeatingForDate = async (date) => {
+        setSeatingLoading(true);
+        try {
+            const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
+
+            // 1. Find the activity for this date
+            const { data: activity } = await supabase
+                .from('activities')
+                .select('id')
+                .eq('date', cleanDate)
+                .eq('type', 'boat_practice')
+                .maybeSingle();
+
+            let participants = [];
+
+            if (activity?.id) {
+                // 2. Get all registrations for this activity
+                const { data: regs } = await supabase
+                    .from('activity_registrations')
+                    .select('user_id')
+                    .eq('activity_id', activity.id);
+
+                if (regs && regs.length > 0) {
+                    // 3. Get participant details from members table
+                    const userIds = regs.map(r => r.user_id).filter(Boolean);
+
+                    // Step A: Try to find members by user_id
+                    const { data: membersByUserId } = userIds.length > 0
+                        ? await supabase.from('members')
+                            .select('name, email, weight, position, skill_rating, user_id')
+                            .in('user_id', userIds)
+                        : { data: [] };
+
+                    const foundUserIds = new Set((membersByUserId || []).map(m => m.user_id));
+                    const missingUserIds = userIds.filter(id => !foundUserIds.has(id));
+
+                    // Step B: For missing user_ids, look up their email from auth then match in members
+                    let membersByEmail = [];
+                    if (missingUserIds.length > 0) {
+                        const { data: allAuthUsers } = await supabase.rpc('admin_list_users_with_roles');
+                        const missingEmails = (allAuthUsers || [])
+                            .filter(u => missingUserIds.includes(u.user_id) && u.email)
+                            .map(u => u.email.toLowerCase());
+
+                        if (missingEmails.length > 0) {
+                            const { data: emailMatches } = await supabase.from('members')
+                                .select('name, email, weight, position, skill_rating');
+                            membersByEmail = (emailMatches || []).filter(m =>
+                                m.email && missingEmails.includes(m.email.toLowerCase())
+                            );
+                        }
+                    }
+
+                    const allMembers = [...(membersByUserId || []), ...membersByEmail];
+                    participants = allMembers.map(m => ({
+                        Name: m.name || m.email || 'Unknown',
+                        Weight: m.weight || 0,
+                        Position: m.position || '左右',
+                        Skill_Rating: m.skill_rating || 1,
+                    }));
+                }
+            }
+
+            // 4. Try to fetch saved arrangement snapshot
+            const { data: savedData } = await supabase
+                .from('seating_arrangements')
+                .select('boat_data')
+                .eq('practice_date', cleanDate)
+                .maybeSingle();
+
+            if (savedData?.boat_data) {
+                // Validate saved data actually has paddlers
+                const bd = savedData.boat_data;
+                const hasLeftPaddlers = Array.isArray(bd.left) && bd.left.some(p => p !== null);
+                const hasRightPaddlers = Array.isArray(bd.right) && bd.right.some(p => p !== null);
+                
+                if (hasLeftPaddlers || hasRightPaddlers) {
+                    // Post-process: resolve any email-as-Name entries to proper member names
+                    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    let allPaddlers = [
+                        ...(bd.left || []),
+                        ...(bd.right || []),
+                        ...(bd.reserve || []),
+                        bd.steer, bd.drummer
+                    ].filter(Boolean);
+                    
+                    const emailNames = allPaddlers
+                        .map(p => p.Name || p.name)
+                        .filter(n => n && emailPattern.test(n));
+
+                    if (emailNames.length > 0) {
+                        const { data: memberLookup } = await supabase
+                            .from('members')
+                            .select('name, email');
+                        const emailToName = {};
+                        (memberLookup || []).forEach(m => {
+                            if (m.email) emailToName[m.email.toLowerCase()] = m.name;
+                        });
+
+                        const fixName = (paddler) => {
+                            if (!paddler) return paddler;
+                            const pName = paddler.Name || paddler.name;
+                            if (pName && emailPattern.test(pName)) {
+                                const resolved = emailToName[pName.toLowerCase()];
+                                if (resolved) {
+                                    return { ...paddler, Name: resolved, name: resolved };
+                                }
+                            }
+                            return paddler;
+                        };
+
+                        if (bd.left) bd.left = bd.left.map(fixName);
+                        if (bd.right) bd.right = bd.right.map(fixName);
+                        if (bd.reserve) bd.reserve = bd.reserve.map(fixName);
+                        if (bd.steer) bd.steer = fixName(bd.steer);
+                        if (bd.drummer) bd.drummer = fixName(bd.drummer);
+                        
+                        // Rebuild allPaddlers after name fixes
+                        allPaddlers = [
+                            ...(bd.left || []),
+                            ...(bd.right || []),
+                            ...(bd.reserve || []),
+                            bd.steer, bd.drummer
+                        ].filter(Boolean);
+                    }
+
+                    // 👉 CORE FIX: Merge late registrants into empty seats or reserve list!
+                    if (!bd.reserve) bd.reserve = [];
+                    const seatedNames = new Set(allPaddlers.map(p => p.Name || p.name));
+                    
+                    participants.forEach(participant => {
+                        if (!seatedNames.has(participant.Name)) {
+                            let seated = false;
+                            
+                            // 1. Try Steer
+                            if (!bd.steer && participant.Position && participant.Position.includes('舵手')) {
+                                bd.steer = participant;
+                                seated = true;
+                            } 
+                            // 2. Try Drummer
+                            else if (!bd.drummer && participant.Position && participant.Position.includes('鼓手')) {
+                                bd.drummer = participant;
+                                seated = true;
+                            }
+                            
+                            // 3. Try Left
+                            if (!seated && participant.Position && (participant.Position.includes('左') || participant.Position.includes('左右'))) {
+                                const emptyLeftIdx = bd.left.findIndex(seat => seat === null);
+                                if (emptyLeftIdx !== -1) {
+                                    bd.left[emptyLeftIdx] = participant;
+                                    seated = true;
+                                }
+                            }
+                            
+                            // 4. Try Right (if Left failed or only canRight)
+                            if (!seated && participant.Position && (participant.Position.includes('右') || participant.Position.includes('左右'))) {
+                                const emptyRightIdx = bd.right.findIndex(seat => seat === null);
+                                if (emptyRightIdx !== -1) {
+                                    bd.right[emptyRightIdx] = participant;
+                                    seated = true;
+                                }
+                            }
+                            
+                            // 5. Fallback to Reserve
+                            if (!seated && !bd.reserve.some(r => (r.Name || r.name) === participant.Name)) {
+                                bd.reserve.push(participant);
+                            }
+                        }
+                    });
+
+                    setSeatingData(bd);
+                    return;
+                }
+            }
+
+            // 5. If NO saved snapshot or empty snapshot, generate brand new seating from participants!
+            setSeatingData(generateSeating(participants));
+        } catch (error) {
+            console.error("Error loading seating:", error);
+            setSeatingData(generateSeating([]));
+        } finally {
+            setSeatingLoading(false);
+        }
+    };
 
     // 從 Calendar 頁面導航過來時的預選活動
     useEffect(() => {
@@ -71,18 +273,10 @@ export default function PracticePage() {
     const loadData = async () => {
         setLoading(true);
         try {
-            // 超時保護
-            const withQuickTimeout = (promise, ms = 3000, fallback = []) => {
-                return Promise.race([
-                    promise,
-                    new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
-                ]);
-            };
-
-            // 只載入核心活動資料 (帶快速超時)
+            // 只載入核心活動資料
             const [acts, regs] = await Promise.all([
-                withQuickTimeout(fetchActivities(), 3000, []),
-                withQuickTimeout(fetchActivityRegistrations(), 3000, [])
+                fetchActivities(true),
+                fetchActivityRegistrations(false, true)
             ]);
 
             setActivities(acts || []);
@@ -94,8 +288,8 @@ export default function PracticePage() {
                 try {
                     const { data: members } = await supabase
                         .from('members')
-                        .select('name, email, weight, position, skill_rating')
-                        .limit(50);
+                        .select('name, email, weight, position, skill_rating, user_id')
+                        .order('name'); // Remove limit to ensure all members are loaded
 
                     const { data: dates } = await supabase
                         .from('practice_dates')
@@ -103,12 +297,20 @@ export default function PracticePage() {
                         .order('confirmed_date', { ascending: false })
                         .limit(10);
 
-                    const { data: practiceRegs } = await supabase
+                    const recentDates = dates ? dates.map(d => d.display_date) : [];
+                    let practiceRegsQuery = supabase
                         .from('practice_registrations')
                         .select('member_name, practice_date');
 
+                    if (recentDates.length > 0) {
+                        practiceRegsQuery = practiceRegsQuery.in('practice_date', recentDates);
+                    }
+
+                    const { data: practiceRegs } = await practiceRegsQuery;
+
                     if (members) {
                         setUsers(members.map(m => ({
+                            id: m.user_id, // Add user_id for better matching
                             Name: m.name,
                             Email: m.email,
                             Weight: m.weight,
@@ -128,12 +330,35 @@ export default function PracticePage() {
                         setOpenDates(safeDates.map(d => d.Confirmed_date).filter(Boolean));
                     }
 
-                    if (practiceRegs) {
-                        setAllRegs(practiceRegs.map(r => ({
-                            name: r.member_name,
-                            practicedates: r.practice_date
-                        })));
+                    setAllRegs(practiceRegs.map(r => ({
+                        name: r.member_name,
+                        practicedates: r.practice_date
+                    })));
+
+                    // 🔥 Fetch Synced Seating Charts (from both old practice_dates and new activities)
+                    const allSeatingDates = [];
+
+                    // Old system dates
+                    if (dates && dates.length > 0) {
+                        dates.forEach(d => {
+                            if (d.display_date) allSeatingDates.push(d.display_date);
+                        });
                     }
+
+                    // New activities system dates (boat_practice)
+                    const boatActivities = (acts || []).filter(a => a.type === 'boat_practice');
+                    const newSeatingDates = boatActivities
+                        .map(a => `${a.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(a.date).getDay()]})`)
+                        .sort(); // Sort dates
+
+                    setAvailableSeatingDates(newSeatingDates);
+
+                    // Set default date if available
+                    if (newSeatingDates.length > 0 && !seatingDate) {
+                        // Find closest upcoming date or just the first one
+                        setSeatingDate(newSeatingDates[0]);
+                    }
+
                 } catch (e) {
                     console.warn('座位表資料載入失敗:', e.message);
                 }
@@ -149,8 +374,10 @@ export default function PracticePage() {
 
     // 篩選可報名的活動 (根據選擇的類別，且未過報名截止日)
     const filteredActivities = activities.filter(act => {
-        if (!selectedCategory) return false;
-        if (act.type !== selectedCategory) return false;
+        if (selectedCategory && selectedCategory !== 'all') {
+            if (act.type !== selectedCategory) return false;
+        }
+
         // 檢查是否已過截止日 (截止日當天 23:59:59 前都算有效)
         if (act.deadline) {
             const deadline = new Date(act.deadline);
@@ -159,6 +386,11 @@ export default function PracticePage() {
         }
         return true;
     });
+
+    // Pagination Logic
+    const itemsPerPage = 5;
+    const totalPages = Math.ceil(filteredActivities.length / itemsPerPage);
+    const displayedActivities = filteredActivities.slice((activityPage - 1) * itemsPerPage, activityPage * itemsPerPage);
 
     const handleActivityCheck = (activityId) => {
         if (selectedActivities.includes(activityId)) {
@@ -254,7 +486,7 @@ export default function PracticePage() {
 
     const getCategoryLabel = (type) => {
         const cat = ACTIVITY_CATEGORIES.find(c => c.value === type);
-        return cat?.label || type;
+        return lang === 'zh' ? cat?.label_zh : cat?.label_en || type;
     };
 
     const getCategoryColor = (type) => {
@@ -272,10 +504,48 @@ export default function PracticePage() {
 
     // Seating chart (for boat practice only)
     const renderSeatingCharts = () => {
-        if (!Array.isArray(openDates) || openDates.length === 0) {
-            return <div className="text-center text-gray-400 py-8">目前沒有船練座位資料</div>;
+        // Get boat practice activities from new system
+        const boatActivities = (activities || []).filter(a => a.type === 'boat_practice');
+
+        // Convert registrations to lookup
+        const regsByActivityId = (myRegistrations || []).reduce((acc, reg) => {
+            if (reg.activity_id) acc[reg.activity_id] = true;
+            return acc;
+        }, {});
+
+        // Filter to only show activities user registered for
+        const myBoatActivities = boatActivities.filter(a => regsByActivityId[a.id]);
+
+        if (myBoatActivities.length === 0 && (!Array.isArray(openDates) || openDates.length === 0)) {
+            return <div className="text-center text-gray-400 py-8">{lang === 'zh' ? '目前沒有船練座位資料' : 'No seating data available'}</div>;
         }
 
+        // Render from new activities system
+        const renderedFromActivities = myBoatActivities.slice(0, 3).map(activity => {
+            const formattedDate = `${activity.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(activity.date).getDay()]})`;
+
+            // Look up synced seating chart
+            const boatData = seatingCharts[formattedDate];
+
+            if (!boatData) return null;
+
+            return (
+                <div key={activity.id} className="mb-8">
+                    <SeatVisualizer
+                        boatData={boatData}
+                        date={formattedDate}
+                        location={activity.location || ''}
+                        time={activity.start_time || ''}
+                    />
+                </div>
+            );
+        }).filter(Boolean);
+
+        if (renderedFromActivities.length > 0) {
+            return renderedFromActivities;
+        }
+
+        // Fallback to old system
         return openDates.slice(0, 3).map(date => {
             const safeAllRegs = Array.isArray(allRegs) ? allRegs : [];
             const sessionInfo = practiceSessions.find(s => (s.Confirmed_date || s.Confirmed_Date) === date);
@@ -288,8 +558,8 @@ export default function PracticePage() {
 
             if (participantsNames.length === 0) return null;
 
-            const participants = users.filter(u => participantsNames.includes(u.Name));
-            const boatData = generateSeating(participants);
+            // 🔥 Use Synced Data if available, otherwise generate locally
+            const boatData = seatingCharts[date] || generateSeating(users.filter(u => participantsNames.includes(u.Name)));
 
             return (
                 <div key={date} className="mb-8">
@@ -312,12 +582,12 @@ export default function PracticePage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
-                                <Ship className="text-sky-600" /> 活動報名
+                                <Ship className="text-sky-600" /> {t('prac_title')}
                             </h1>
                             <p className="text-gray-500 mt-1">
-                                報名活動以及查看槳位安排
+                                {lang === 'zh' ? '報名活動以及查看槳位安排' : 'Register for activities and view seating'}
                                 <span className="text-sm text-gray-400 ml-2">
-                                    (船練、Team Building、龍舟比賽以及內部競賽)
+                                    ({lang === 'zh' ? '船練、Team Building、龍舟比賽以及內部競賽' : 'Practice, Team Building, Races, Internal'})
                                 </span>
                             </p>
                         </div>
@@ -325,7 +595,7 @@ export default function PracticePage() {
                             onClick={loadData}
                             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
                         >
-                            🔄 重新載入
+                            🔄 {lang === 'zh' ? '重新載入' : 'Reload'}
                         </button>
                     </div>
                 </div>
@@ -335,13 +605,13 @@ export default function PracticePage() {
                     {/* 報名區塊 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-                            <Filter className="text-sky-600" /> 我要報名
+                            <Filter className="text-sky-600" /> {lang === 'zh' ? '我要報名' : 'Register'}
                         </h2>
 
                         {/* 活動類別選擇 */}
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                活動類別
+                                {lang === 'zh' ? '活動類別' : 'Activity Type'}
                             </label>
                             <select
                                 className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-sky-500 focus:border-transparent transition outline-none text-gray-900"
@@ -349,11 +619,11 @@ export default function PracticePage() {
                                 onChange={(e) => {
                                     setSelectedCategory(e.target.value);
                                     setSelectedActivities([]);
+                                    setActivityPage(1); // Reset page
                                 }}
                             >
-                                <option value="">-- 請選擇活動類別 --</option>
                                 {ACTIVITY_CATEGORIES.map(cat => (
-                                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                    <option key={cat.value} value={cat.value}>{lang === 'zh' ? cat.label_zh : cat.label_en}</option>
                                 ))}
                             </select>
                         </div>
@@ -361,68 +631,89 @@ export default function PracticePage() {
                         {/* 活動選擇 */}
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                活動
+                                {lang === 'zh' ? '活動' : 'Activities'}
                             </label>
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                                {!selectedCategory ? (
+                            <div className="space-y-2 min-h-[300px]">
+                                {filteredActivities.length === 0 ? (
                                     <p className="text-gray-400 text-sm py-4 text-center">
-                                        請先選擇活動類別
-                                    </p>
-                                ) : filteredActivities.length === 0 ? (
-                                    <p className="text-gray-400 text-sm py-4 text-center">
-                                        目前沒有開放報名的{getCategoryLabel(selectedCategory)}活動
+                                        {lang === 'zh' ? `目前沒有開放報名的活動` : `No activities available`}
                                     </p>
                                 ) : (
-                                    filteredActivities.map(activity => {
-                                        const isSelected = selectedActivities.includes(activity.id);
-                                        const isAlreadyRegistered = myRegistrations.some(r => r.activity_id === activity.id);
+                                    <>
+                                        {displayedActivities.map(activity => {
+                                            const isSelected = selectedActivities.includes(activity.id);
+                                            const isAlreadyRegistered = myRegistrations.some(r => r.activity_id === activity.id);
 
-                                        return (
-                                            <label
-                                                key={activity.id}
-                                                className={`
+                                            return (
+                                                <label
+                                                    key={activity.id}
+                                                    className={`
                                                     flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition
                                                     ${isAlreadyRegistered
-                                                        ? 'bg-green-50 border-green-300 opacity-60'
-                                                        : isSelected
-                                                            ? 'bg-sky-50 border-sky-500 shadow-sm'
-                                                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                                    }
+                                                            ? 'bg-green-50 border-green-300 opacity-60'
+                                                            : isSelected
+                                                                ? 'bg-sky-50 border-sky-500 shadow-sm'
+                                                                : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                                        }
                                                 `}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-5 h-5 text-sky-600 rounded focus:ring-sky-500"
-                                                    checked={isSelected}
-                                                    disabled={isAlreadyRegistered}
-                                                    onChange={() => handleActivityCheck(activity.id)}
-                                                />
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-gray-800 flex items-center gap-2">
-                                                        {activity.name}
-                                                        {isAlreadyRegistered && (
-                                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">已報名</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar size={12} /> {activity.date}
-                                                        </span>
-                                                        {activity.location && (
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-5 h-5 text-sky-600 rounded focus:ring-sky-500"
+                                                        checked={isSelected}
+                                                        disabled={isAlreadyRegistered}
+                                                        onChange={() => handleActivityCheck(activity.id)}
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                            {activity.name}
+                                                            {isAlreadyRegistered && (
+                                                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{lang === 'zh' ? '已報名' : 'Registered'}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
                                                             <span className="flex items-center gap-1">
-                                                                <MapPin size={12} /> {activity.location}
+                                                                <Calendar size={12} /> {activity.date}
                                                             </span>
-                                                        )}
-                                                        {activity.start_time && (
-                                                            <span className="flex items-center gap-1 text-sky-600 font-medium">
-                                                                <Clock size={12} /> {activity.start_time}
-                                                            </span>
-                                                        )}
+                                                            {activity.location && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <MapPin size={12} /> {activity.location}
+                                                                </span>
+                                                            )}
+                                                            {activity.start_time && (
+                                                                <span className="flex items-center gap-1 text-sky-600 font-medium">
+                                                                    <Clock size={12} /> {activity.start_time}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </label>
-                                        );
-                                    })
+                                                </label>
+                                            );
+                                        })}
+
+                                        {/* Pagination Controls */}
+                                        {filteredActivities.length > itemsPerPage && (
+                                            <div className="flex items-center justify-end gap-3 mt-4 pt-2">
+                                                <button
+                                                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                                                    disabled={activityPage === 1}
+                                                    className="w-8 h-8 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                                >
+                                                    &lt;
+                                                </button>
+                                                <span className="text-sm text-gray-500">
+                                                    {activityPage} / {totalPages}
+                                                </span>
+                                                <button
+                                                    onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                                                    disabled={activityPage >= totalPages}
+                                                    className="w-8 h-8 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                                >
+                                                    &gt;
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -439,25 +730,25 @@ export default function PracticePage() {
                                 }
                             `}
                         >
-                            <CheckCircle size={20} /> 確定報名
+                            <CheckCircle size={20} /> {lang === 'zh' ? '確定報名' : 'Confirm Registration'}
                         </button>
                     </div>
 
                     {/* 已報名的活動區塊 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-                            <Calendar className="text-orange-500" /> 已報名的活動
+                            <Calendar className="text-orange-500" /> {lang === 'zh' ? '已報名的活動' : 'Registered Activities'}
                         </h2>
 
                         {!user ? (
                             <div className="text-center py-12 bg-gray-50 rounded-xl text-gray-400">
                                 <div className="text-4xl mb-3">🔐</div>
-                                請先登入<br />才能看到你的報名紀錄
+                                {lang === 'zh' ? <>請先登入<br />才能看到你的報名紀錄</> : <>Please login<br />to view your registrations</>}
                             </div>
                         ) : myRegistrations.length === 0 ? (
                             <div className="text-center py-12 bg-gray-50 rounded-xl text-gray-400">
                                 <div className="text-3xl mb-2">🏃‍♂️</div>
-                                目前沒有報名任何活動
+                                {lang === 'zh' ? '目前沒有報名任何活動' : 'No registered activities'}
                             </div>
                         ) : (
                             <div className="space-y-6">
@@ -506,16 +797,46 @@ export default function PracticePage() {
 
                 {/* 船練座位表 */}
                 <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        📊 船練座位表
-                    </h2>
-                    <p className="text-gray-500 text-sm mb-6">
-                        * 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。
-                    </p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                📊 {lang === 'zh' ? '船練座位表' : 'Seating Chart'}
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">
+                                {lang === 'zh' ? '* 這是系統根據目前報名狀況自動預排或教練已確認的結果。' : '* This is an auto-generated preview or a confirmed arrangement by coaches.'}
+                            </p>
+                        </div>
 
-                    <div className="space-y-8">
-                        {renderSeatingCharts()}
+                        {/* 日期選擇器 */}
+                        <div className="relative">
+                            <select
+                                value={seatingDate}
+                                onChange={(e) => setSeatingDate(e.target.value)}
+                                className="appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full p-2.5 pr-8"
+                            >
+                                {availableSeatingDates.length === 0 && <option value="">{lang === 'zh' ? '暫無船練' : 'No Practice'}</option>}
+                                {availableSeatingDates.map(date => (
+                                    <option key={date} value={date}>{date}</option>
+                                ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                <ChevronDown size={16} />
+                            </div>
+                        </div>
                     </div>
+
+                    {seatingLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mb-4"></div>
+                            <p className="text-gray-500">{lang === 'zh' ? '載入座位表中...' : 'Loading chart...'}</p>
+                        </div>
+                    ) : (
+                        <SeatVisualizer
+                            boatData={seatingData}
+                            date={seatingDate}
+                            isEditable={false}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -524,7 +845,7 @@ export default function PracticePage() {
                 <div className="fixed inset-0 bg-white/60 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center border border-sky-100">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-sky-600 mb-4"></div>
-                        <p className="font-bold text-sky-800">資料同步中...</p>
+                        <p className="font-bold text-sky-800">{lang === 'zh' ? '資料同步中...' : 'Loading...'}</p>
                     </div>
                 </div>
             )}

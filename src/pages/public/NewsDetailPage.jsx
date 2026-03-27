@@ -2,26 +2,34 @@
 // RUMA 龍舟隊最新消息詳情頁
 
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { fetchNewsDetail } from '../../api/supabaseApi';
-import { ArrowLeft, Calendar, Tag, Pin, Loader2 } from 'lucide-react';
+import { fetchNewsDetail, fetchNewsPreview } from '../../api/supabaseApi';
+import { ArrowLeft, Calendar, Tag, Pin, Loader2, Eye } from 'lucide-react';
+import NewsContentRenderer from '../../components/NewsContentRenderer';
 
 const CATEGORIES = [
     { id: 'all', label: '全部', labelEn: 'All' },
-    { id: '參賽消息', label: '參賽消息', labelEn: 'Race News' },
-    { id: '隊伍活動', label: '隊伍活動', labelEn: 'Team Events' },
     { id: '體驗招募', label: '體驗招募', labelEn: 'Recruitment' },
-    { id: '訓練回顧', label: '訓練回顧', labelEn: 'Training Review' }
+    { id: '比賽消息', label: '比賽消息', labelEn: 'Race' },
+    { id: '團隊活動', label: '團隊活動', labelEn: 'Team Activity' },
+    { id: '運動相關', label: '運動相關', labelEn: 'Training' },
+    { id: '其他', label: '其他', labelEn: 'Others' }
 ];
 
 export default function NewsDetailPage() {
     const { slug } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { lang } = useLanguage();
     const [news, setNews] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // Preview mode: ?preview=true&token=xxx
+    const searchParams = new URLSearchParams(location.search);
+    const isPreview = searchParams.get('preview') === 'true';
+    const previewToken = searchParams.get('token') ?? '';
 
     useEffect(() => {
         loadNews();
@@ -29,15 +37,70 @@ export default function NewsDetailPage() {
 
     const loadNews = async () => {
         setLoading(true);
-        const data = await fetchNewsDetail(slug);
+        let data;
+        if (isPreview && previewToken) {
+            data = await fetchNewsPreview(slug, previewToken);
+        } else {
+            data = await fetchNewsDetail(slug);
+        }
         if (!data) {
-            // 文章不存在，導回列表頁
             navigate('/news');
             return;
         }
         setNews(data);
         setLoading(false);
     };
+
+    // 動態注入 Article Schema (SEO/AEO) — 草稿預覽模式下跳過
+    useEffect(() => {
+        if (!news || isPreview) return;
+
+        const articleSchema = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": news.title,
+            "datePublished": news.published_at,
+            "dateModified": news.updated_at || news.published_at,
+            "author": {
+                "@type": "Organization",
+                "name": "RUMA 龍舟隊"
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "RUMA 龍舟隊",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": "https://rumadragonboat.com/logo_website.png"
+                }
+            },
+            "image": news.cover_image || "https://rumadragonboat.com/banner.jpg",
+            "description": news.excerpt || "",
+            "mainEntityOfPage": {
+                "@type": "WebPage",
+                "@id": `https://rumadragonboat.com/news/${news.slug}`
+            }
+        };
+
+        const script = document.createElement('script');
+        script.type = 'application/ld+json';
+        script.id = 'article-schema';
+        script.text = JSON.stringify(articleSchema);
+
+        // 移除舊的 schema
+        const existingScript = document.getElementById('article-schema');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        document.head.appendChild(script);
+
+        return () => {
+            const scriptToRemove = document.getElementById('article-schema');
+            if (scriptToRemove) {
+                scriptToRemove.remove();
+            }
+        };
+    }, [news]);
 
     // 格式化日期
     const formatDate = (dateStr) => {
@@ -51,89 +114,8 @@ export default function NewsDetailPage() {
     };
 
     // 渲染富文本內容
-    const renderContent = (content) => {
-        if (!content || !Array.isArray(content)) return null;
+    // Note: Converted to use NewsContentRenderer for consistency
 
-        return content.map((block, index) => {
-            switch (block.type) {
-                case 'paragraph':
-                    return (
-                        <p key={index} className="text-gray-300 leading-relaxed mb-6">
-                            {block.text}
-                        </p>
-                    );
-                case 'heading':
-                    return (
-                        <h2 key={index} className="font-display font-bold text-2xl text-white mt-8 mb-4">
-                            {block.text}
-                        </h2>
-                    );
-                case 'image':
-                    return (
-                        <figure key={index} className="my-8">
-                            <img
-                                src={block.url}
-                                alt={block.caption || ''}
-                                referrerPolicy="no-referrer"
-                                className="w-full rounded-lg"
-                            />
-                            {block.caption && (
-                                <figcaption className="text-center text-gray-500 text-sm mt-2">
-                                    {block.caption}
-                                </figcaption>
-                            )}
-                        </figure>
-                    );
-                case 'video':
-                    return (
-                        <div key={index} className="my-8 aspect-video">
-                            <iframe
-                                src={block.url}
-                                title={block.caption || 'Video'}
-                                className="w-full h-full rounded-lg"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                            />
-                        </div>
-                    );
-                case 'quote':
-                    return (
-                        <blockquote key={index} className="border-l-4 border-red-600 pl-6 py-2 my-8 italic">
-                            <p className="text-xl text-red-400 font-medium">
-                                "{block.text}"
-                            </p>
-                            {block.author && (
-                                <cite className="text-gray-500 not-italic mt-2 block">
-                                    — {block.author}
-                                </cite>
-                            )}
-                        </blockquote>
-                    );
-                case 'list':
-                    return (
-                        <ul key={index} className="list-disc list-inside space-y-2 mb-6 text-gray-300">
-                            {block.items?.map((item, i) => (
-                                <li key={i}>{item}</li>
-                            ))}
-                        </ul>
-                    );
-                case 'link':
-                    return (
-                        <a
-                            key={index}
-                            href={block.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block text-red-500 hover:text-red-400 underline mb-4"
-                        >
-                            {block.text || block.url}
-                        </a>
-                    );
-                default:
-                    return null;
-            }
-        });
-    };
 
     if (loading) {
         return (
@@ -156,6 +138,14 @@ export default function NewsDetailPage() {
     return (
         <div className="min-h-screen bg-[#0a0a0a] font-sans">
             <Navbar />
+
+            {/* 草稿預覽橫幅 */}
+            {isPreview && (
+                <div className="bg-yellow-500 text-black text-center py-2.5 px-4 font-bold text-sm flex items-center justify-center gap-2">
+                    <Eye size={16} />
+                    草稿預覽模式 — 此文章尚未正式發布，僅供審核使用
+                </div>
+            )}
 
             {/* Hero Banner */}
             <section className="relative h-[60vh] min-h-[400px] flex items-end overflow-hidden">
@@ -217,7 +207,7 @@ export default function NewsDetailPage() {
 
                     {/* Main Content */}
                     <div className="prose prose-invert max-w-none">
-                        {renderContent(displayContent)}
+                        <NewsContentRenderer content={displayContent} />
                     </div>
 
                     {/* Back Button */}

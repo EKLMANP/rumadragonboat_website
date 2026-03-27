@@ -4,10 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/AppLayout';
 import { Megaphone, Crown, Search, Pin, ChevronRight, Loader2, Trophy, X } from 'lucide-react';
-import { fetchAnnouncements, fetchAttendance, fetchAllData } from '../../api/supabaseApi';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { fetchAnnouncements, fetchAttendance, fetchAllData, fetchMemberBasicInfo, fetchMPointLeaderboard } from '../../api/supabaseApi';
 import { supabase } from '../../lib/supabase';
 
 export default function AnnouncementsNewsPage() {
+    const { lang } = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -24,20 +26,18 @@ export default function AnnouncementsNewsPage() {
     const loadPageData = async () => {
         setLoading(true);
         try {
-            const [newsData, attData, allData] = await Promise.all([
+            const [newsData, attData, mPointLeaderboard] = await Promise.all([
                 fetchAnnouncements(),
                 fetchAttendance(),
-                fetchAllData()
+                fetchMPointLeaderboard()
             ]);
 
             setAnnouncements(newsData || []);
 
-            // Fetch members with avatar_url
-            const { data: members } = await supabase
-                .from('members')
-                .select('name, avatar_url');
+            // Fetch members with avatar_url safely
+            const members = await fetchMemberBasicInfo();
 
-            processLeaderboard(attData, members || []);
+            processLeaderboard(attData, members || [], mPointLeaderboard || []);
 
         } catch (error) {
             console.error("Load Error", error);
@@ -46,13 +46,13 @@ export default function AnnouncementsNewsPage() {
         }
     };
 
-    const processLeaderboard = (attendanceData, membersList) => {
+    const processLeaderboard = (attendanceData, membersList, mPointData) => {
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
         const currentYear = now.getFullYear();
 
+        // Count monthly attendance
         const monthlyStats = {};
-
         attendanceData.forEach(record => {
             const dateStr = record.Date.split('(')[0].replace(/\//g, '-');
             const d = new Date(dateStr);
@@ -62,15 +62,28 @@ export default function AnnouncementsNewsPage() {
             }
         });
 
+        // Create M-point lookup from real data
+        const mPointLookup = {};
+        mPointData.forEach(m => {
+            mPointLookup[m.name] = m.points || 0;
+        });
+
         // Create member lookup for avatar
         const memberLookup = {};
         membersList.forEach(m => {
             memberLookup[m.name] = m.avatar_url || null;
         });
 
-        const sorted = Object.entries(monthlyStats)
-            .map(([name, count]) => {
-                const points = count * 100;
+        // Merge: use real M-points, fall back to attendance-based if no M-point data
+        const allNames = new Set([
+            ...Object.keys(monthlyStats),
+            ...Object.keys(mPointLookup)
+        ]);
+
+        const sorted = Array.from(allNames)
+            .map(name => {
+                const count = monthlyStats[name] || 0;
+                const points = mPointLookup[name] || count; // Use real M-points, fallback to attendance count
                 return {
                     name,
                     count,
@@ -79,11 +92,12 @@ export default function AnnouncementsNewsPage() {
                     avatar: memberLookup[name] || null
                 };
             })
-            .sort((a, b) => b.count - a.count);
+            .filter(item => item.points > 0 || item.count > 0)
+            .sort((a, b) => b.points - a.points || b.count - a.count);
 
         let currentRank = 1;
         for (let i = 0; i < sorted.length; i++) {
-            if (i > 0 && sorted[i].count < sorted[i - 1].count) {
+            if (i > 0 && sorted[i].points < sorted[i - 1].points) {
                 currentRank = i + 1;
             }
             sorted[i].rank = currentRank;
@@ -93,6 +107,19 @@ export default function AnnouncementsNewsPage() {
     };
 
     const categories = ['all', '活動', '比賽', '裝勤', '榮譽', '其他'];
+
+    const getTranslatedCategory = (cat) => {
+        if (lang === 'zh') return cat;
+        if (cat === 'all') return 'All';
+        const map = {
+            '活動': 'Activity',
+            '比賽': 'Race',
+            '裝勤': 'Equipment',
+            '榮譽': 'Honor',
+            '其他': 'Other'
+        };
+        return map[cat] || cat;
+    };
 
     const getCategoryColor = (category) => {
         const colors = {
@@ -145,20 +172,20 @@ export default function AnnouncementsNewsPage() {
                 <div className="mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
                         <Megaphone className="text-red-600" />
-                        最新公告
+                        {lang === 'zh' ? '最新公告' : 'Latest Announcements'}
                     </h1>
-                    <p className="text-gray-500 mt-1">本月風雲榜與隊伍最新消息</p>
+                    <p className="text-gray-500 mt-1">{lang === 'zh' ? '本月風雲榜與隊伍最新消息' : 'Monthly Leaderboard and Team News'}</p>
                 </div>
 
                 {/* 主要區域 - 風雲榜優先 */}
                 <div className="grid lg:grid-cols-5 gap-6">
                     {/* 本月風雲榜 - 佔據 3/5 寬度 */}
                     <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg p-8 bg-gradient-to-b from-white via-amber-50/30 to-white">
-                        <h2 className="text-xl font-bold text-gray-800 mb-8 flex items-center gap-3 justify-center">
+                        <h2 className="text-xl font-bold text-gray-800 mb-14 flex items-center gap-3 justify-center">
                             <Trophy className="text-yellow-500" size={28} />
-                            本月風雲榜
+                            {lang === 'zh' ? '本月風雲榜' : 'Monthly Leaderboard'}
                             <span className="text-sm font-normal text-gray-400 ml-2">
-                                {new Date().getMonth() + 1}月
+                                {new Date().getMonth() + 1}{lang === 'zh' ? '月' : ' Month'}
                             </span>
                         </h2>
 
@@ -169,7 +196,7 @@ export default function AnnouncementsNewsPage() {
                         ) : leaderboard.length === 0 ? (
                             <div className="text-center text-gray-400 py-16">
                                 <Trophy className="mx-auto mb-4 text-gray-200" size={60} />
-                                <p>本月尚無出席紀錄</p>
+                                <p>{lang === 'zh' ? '本月尚無出席紀錄' : 'No attendance record this month'}</p>
                             </div>
                         ) : (
                             <>
@@ -192,7 +219,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-sm font-bold text-gray-700 block">{leaderboard[1].name}</span>
-                                                <span className="text-xs text-gray-500">{leaderboard[1].points} M點</span>
+                                                <span className="text-xs text-gray-500">{leaderboard[1].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -215,7 +242,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-base font-bold text-gray-800 block">{leaderboard[0].name}</span>
-                                                <span className="text-sm font-semibold text-yellow-600">{leaderboard[0].points} M點</span>
+                                                <span className="text-sm font-semibold text-yellow-600">{leaderboard[0].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -237,7 +264,7 @@ export default function AnnouncementsNewsPage() {
                                             </div>
                                             <div className="text-center mt-3">
                                                 <span className="text-sm font-bold text-gray-700 block">{leaderboard[2].name}</span>
-                                                <span className="text-xs text-gray-500">{leaderboard[2].points} M點</span>
+                                                <span className="text-xs text-gray-500">{leaderboard[2].points} {lang === 'zh' ? 'M點' : 'M Pts'}</span>
                                             </div>
                                         </div>
                                     )}
@@ -245,16 +272,16 @@ export default function AnnouncementsNewsPage() {
 
                                 {/* Rank 4-5 */}
                                 {leaderboard.length > 3 && (
-                                    <div className="grid grid-cols-2 gap-4 px-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 px-2 sm:px-8">
                                         {leaderboard.slice(3).map((item, index) => (
                                             <div key={item.name} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
                                                 <span className="text-lg font-bold text-gray-400 w-8">{index + 4}</span>
                                                 <Avatar name={item.name} avatar={item.avatar} size="sm" className="shadow" />
                                                 <div className="flex-1">
                                                     <div className="font-medium text-gray-700">{item.name}</div>
-                                                    <div className="text-xs text-gray-500">{item.count}次出席</div>
+                                                    <div className="text-xs text-gray-500">{item.count} {lang === 'zh' ? '次出席' : (item.count === 1 ? 'Attendance' : 'Attendances')}</div>
                                                 </div>
-                                                <div className="text-sm font-bold text-red-500">{item.points} M</div>
+                                                <div className="text-sm font-bold text-red-500">{item.points} {lang === 'zh' ? 'M點' : 'M Pts'}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -266,15 +293,15 @@ export default function AnnouncementsNewsPage() {
                     {/* 最新消息 - 佔據 2/5 寬度 */}
                     <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6 flex flex-col max-h-[700px]">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-gray-800">📢 最新消息</h2>
+                            <h2 className="text-lg font-bold text-gray-800">📢 {lang === 'zh' ? '最新消息' : 'Latest News'}</h2>
                             <select
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                className="px-3 py-1.5 border border-gray-200 bg-white text-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                             >
-                                <option value="all">所有類別</option>
+                                <option value="all">{lang === 'zh' ? '所有類別' : 'All Categories'}</option>
                                 {categories.slice(1).map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
+                                    <option key={cat} value={cat}>{getTranslatedCategory(cat)}</option>
                                 ))}
                             </select>
                         </div>
@@ -284,10 +311,10 @@ export default function AnnouncementsNewsPage() {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                             <input
                                 type="text"
-                                placeholder="搜尋公告..."
+                                placeholder={lang === 'zh' ? '搜尋公告...' : 'Search announcements...'}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-200 bg-white text-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                             />
                         </div>
 
@@ -298,7 +325,7 @@ export default function AnnouncementsNewsPage() {
                                     <Loader2 className="animate-spin inline text-gray-300" />
                                 </div>
                             ) : filteredAnnouncements.length === 0 ? (
-                                <div className="text-center py-10 text-gray-400">目前沒有公告</div>
+                                <div className="text-center py-10 text-gray-400">{lang === 'zh' ? '目前沒有公告' : 'No announcements found'}</div>
                             ) : (
                                 filteredAnnouncements.map((news) => (
                                     <div
@@ -311,11 +338,11 @@ export default function AnnouncementsNewsPage() {
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                     {news.pinned && (
                                                         <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded font-medium flex items-center gap-1">
-                                                            <Pin size={10} /> 置頂
+                                                            <Pin size={10} /> {lang === 'zh' ? '置頂' : 'Pinned'}
                                                         </span>
                                                     )}
                                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(news.category)}`}>
-                                                        {news.category || '一般'}
+                                                        {getTranslatedCategory(news.category || '一般')}
                                                     </span>
                                                 </div>
                                                 <h3 className="font-bold text-gray-800 group-hover:text-sky-600 transition truncate">
@@ -337,32 +364,32 @@ export default function AnnouncementsNewsPage() {
 
             {/* 公告詳情 Modal */}
             {selectedAnnouncement && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-start">
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-start flex-shrink-0">
+                            <div className="min-w-0 flex-1 pr-2">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
                                     {selectedAnnouncement.pinned && (
-                                        <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded font-medium">置頂</span>
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded font-medium">{lang === 'zh' ? '置頂' : 'Pinned'}</span>
                                     )}
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(selectedAnnouncement.category)}`}>
-                                        {selectedAnnouncement.category || '一般'}
+                                        {getTranslatedCategory(selectedAnnouncement.category || '一般')}
                                     </span>
                                 </div>
-                                <h2 className="text-xl font-bold text-gray-800">{selectedAnnouncement.title}</h2>
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-800 break-words">{selectedAnnouncement.title}</h2>
                                 <p className="text-sm text-gray-400 mt-1">
                                     {new Date(selectedAnnouncement.created_at || selectedAnnouncement.date).toLocaleDateString('zh-TW')}
                                 </p>
                             </div>
                             <button
                                 onClick={() => setSelectedAnnouncement(null)}
-                                className="p-2 hover:bg-gray-100 rounded-full transition"
+                                className="p-2 hover:bg-gray-100 rounded-full transition flex-shrink-0"
                             >
                                 <X size={20} className="text-gray-500" />
                             </button>
                         </div>
-                        <div className="p-6">
-                            <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+                            <div className="text-gray-700 whitespace-pre-wrap leading-relaxed text-sm sm:text-base break-words">
                                 {selectedAnnouncement.content ? (
                                     selectedAnnouncement.content.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
                                         if (part.match(/https?:\/\/[^\s]+/)) {
@@ -380,7 +407,7 @@ export default function AnnouncementsNewsPage() {
                                         }
                                         return part;
                                     })
-                                ) : '無內容'}
+                                ) : (lang === 'zh' ? '無內容' : 'No content')}
                             </div>
                         </div>
                         <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
@@ -388,7 +415,7 @@ export default function AnnouncementsNewsPage() {
                                 onClick={() => setSelectedAnnouncement(null)}
                                 className="px-6 py-2 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 transition"
                             >
-                                關閉
+                                {lang === 'zh' ? '關閉' : 'Close'}
                             </button>
                         </div>
                     </div>

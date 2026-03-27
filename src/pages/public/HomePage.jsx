@@ -47,6 +47,7 @@ export default function HomePage() {
                         muted
                         loop
                         playsInline
+                        preload="auto"
                         poster={heroImageFallback}
                         className="absolute inset-0 w-full h-full object-cover"
                         style={{ filter: 'brightness(0.4)' }}
@@ -419,15 +420,12 @@ export default function HomePage() {
                 <div className="max-w-6xl mx-auto">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-8">
                         {/* Logo with Image */}
-                        <Link to="/" className="flex items-center gap-3 group">
+                        <Link to="/" className="flex items-center group">
                             <img
-                                src="/logo_website.png"
+                                src="/Header_Footer_v2.png"
                                 alt="RUMA"
-                                className="h-8 md:h-10 w-auto group-hover:scale-110 transition"
+                                className="h-5 md:h-6 w-auto group-hover:scale-105 transition"
                             />
-                            <span className="font-display font-bold text-2xl md:text-3xl italic tracking-wider text-white">
-                                RUMA<span className="text-red-600">.</span>
-                            </span>
                         </Link>
 
                         {/* Footer Links - Changed to IG Icon only */}
@@ -441,7 +439,7 @@ export default function HomePage() {
                                 <img
                                     src="/IG icon.png"
                                     alt="Instagram"
-                                    className="h-8 md:h-10 w-auto opacity-80 group-hover/icon:opacity-100 transition-opacity"
+                                    className="h-5 md:h-6 w-auto opacity-80 group-hover/icon:opacity-100 transition-opacity"
                                 />
                             </a>
                         </div>

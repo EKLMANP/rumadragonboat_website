@@ -6,9 +6,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/AppLayout';
 import { Calendar, ChevronLeft, ChevronRight, MapPin, Clock, Ship, X } from 'lucide-react';
 import { fetchActivities, fetchActivityRegistrations } from '../../api/supabaseApi';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function CalendarPage() {
     const navigate = useNavigate();
+    const { t, lang } = useLanguage();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
@@ -37,15 +39,23 @@ export default function CalendarPage() {
     };
 
     // 從 API 取得的活動資料
+    const getEventType = (type) => {
+        const types = {
+            'boat_practice': lang === 'zh' ? '船練' : 'Boat Practice',
+            'team_building': 'Team Building',
+            'race': lang === 'zh' ? '龍舟比賽' : 'Dragon Boat Race',
+            'internal_competition': lang === 'zh' ? '內部競賽' : 'Internal Competition'
+        };
+        return types[type] || type;
+    };
+
     const allEvents = activities.map(a => ({
         id: a.id,
         date: a.date,
-        type: a.type === 'boat_practice' ? '船練' :
-            a.type === 'team_building' ? 'Team Building' :
-                a.type === 'race' ? '龍舟比賽' : '內部競賽',
+        type: getEventType(a.type),
         title: a.name,
-        location: a.location || '待定',
-        time: a.start_time || '待定',
+        location: a.location || t('type_tbd'),
+        time: a.start_time || t('type_tbd'),
         description: a.description
     }));
 
@@ -61,9 +71,12 @@ export default function CalendarPage() {
     const getEventTypeColor = (type) => {
         const colors = {
             '龍舟比賽': 'bg-red-500',
+            'Dragon Boat Race': 'bg-red-500',
             '船練': 'bg-blue-500',
+            'Boat Practice': 'bg-blue-500',
             'Team Building': 'bg-green-500',
             '內部競賽': 'bg-purple-500',
+            'Internal Competition': 'bg-purple-500',
         };
         return colors[type] || 'bg-gray-500';
     };
@@ -93,8 +106,9 @@ export default function CalendarPage() {
         navigate('/app/practice', { state: { preselectedActivity: event } });
     };
 
-    const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-    const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+    const monthNames = t('cal_months');
+    const dayNames = t('cal_days');
+    const yearSuffix = t('cal_year_suffix');
 
     const calendarDays = [];
     for (let i = 0; i < firstDayOfMonth; i++) {
@@ -111,9 +125,9 @@ export default function CalendarPage() {
                 <div className="mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
                         <Calendar className="text-sky-600" />
-                        年度日程表
+                        {t('cal_title')}
                     </h1>
-                    <p className="text-gray-500 mt-1">查看所有活動，點擊活動可報名</p>
+                    <p className="text-gray-500 mt-1">{t('cal_desc')}</p>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-6">
@@ -136,7 +150,7 @@ export default function CalendarPage() {
                                     className="px-3 py-2 border border-gray-200 rounded-lg text-gray-800 font-bold focus:ring-2 focus:ring-sky-500 outline-none"
                                 >
                                     {Array.from({ length: 10 }, (_, i) => 2024 + i).map(y => (
-                                        <option key={y} value={y}>{y}年</option>
+                                        <option key={y} value={y}>{y}</option>
                                     ))}
                                 </select>
 
@@ -210,7 +224,12 @@ export default function CalendarPage() {
 
                         {/* 圖例 */}
                         <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
-                            {['龍舟比賽', '船練', 'Team Building', '內部競賽'].map(type => (
+                            {[
+                                lang === 'zh' ? '船練' : 'Boat Practice',
+                                'Team Building',
+                                lang === 'zh' ? '龍舟比賽' : 'Dragon Boat Race',
+                                lang === 'zh' ? '內部競賽' : 'Internal Competition'
+                            ].map(type => (
                                 <div key={type} className="flex items-center gap-2">
                                     <div className={`w-3 h-3 rounded ${getEventTypeColor(type)}`}></div>
                                     <span className="text-sm text-gray-600">{type}</span>
@@ -221,10 +240,10 @@ export default function CalendarPage() {
 
                     {/* 開放報名的活動 */}
                     <div className="bg-white rounded-2xl shadow-lg p-6">
-                        <h2 className="text-lg font-bold text-gray-800 mb-4">開放報名的活動</h2>
+                        <h2 className="text-lg font-bold text-gray-800 mb-4">{t('cal_open_activities')}</h2>
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
                             {loading ? (
-                                <div className="text-center text-gray-400 py-6">載入中...</div>
+                                <div className="text-center text-gray-400 py-6">{t('cal_loading')}</div>
                             ) : allEvents.length > 0 ? (
                                 [...allEvents]
                                     .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -233,9 +252,12 @@ export default function CalendarPage() {
                                         // 根據類別決定底色
                                         const bgColorMap = {
                                             '龍舟比賽': 'bg-red-50 border-l-4 border-red-500',
+                                            'Dragon Boat Race': 'bg-red-50 border-l-4 border-red-500',
                                             '船練': 'bg-blue-50 border-l-4 border-blue-500',
+                                            'Boat Practice': 'bg-blue-50 border-l-4 border-blue-500',
                                             'Team Building': 'bg-green-50 border-l-4 border-green-500',
                                             '內部競賽': 'bg-purple-50 border-l-4 border-purple-500',
+                                            'Internal Competition': 'bg-purple-50 border-l-4 border-purple-500',
                                         };
                                         const bgClass = bgColorMap[event.type] || 'bg-gray-50 border-l-4 border-gray-400';
 
@@ -265,7 +287,7 @@ export default function CalendarPage() {
                                         );
                                     })
                             ) : (
-                                <div className="text-center text-gray-400 py-6">目前無開放報名的活動</div>
+                                <div className="text-center text-gray-400 py-6">{t('cal_no_activities')}</div>
                             )}
                         </div>
 
@@ -274,7 +296,7 @@ export default function CalendarPage() {
                             className="block mt-4 text-center py-3 bg-sky-600 text-white font-medium rounded-xl hover:bg-sky-700 transition"
                         >
                             <Ship size={16} className="inline mr-2" />
-                            前往活動報名
+                            {t('cal_go_register')}
                         </Link>
                     </div>
                 </div>
@@ -327,7 +349,7 @@ export default function CalendarPage() {
                             className="w-full py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition flex items-center justify-center gap-2"
                         >
                             <Ship size={16} />
-                            報名
+                            {t('cal_register')}
                         </button>
                     </div>
                 </>

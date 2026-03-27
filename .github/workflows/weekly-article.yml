@@ -1,0 +1,85 @@
+name: Weekly Article Generation
+
+on:
+  # schedule:  ← 啟用時取消此區塊註解，並在 Supabase 設定新的 TELEGRAM_BOT_TOKEN
+  #   - cron: '0 0 * * 5'  # 每週五 UTC 00:00 = 台灣時間 08:00
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: '指定文章主題（最多3個，用逗號分隔。留空則隨機選取3個主題）'
+        required: false
+        default: ''
+
+jobs:
+  generate-articles:
+    name: Generate 3 Weekly Articles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Article 1
+        run: |
+          TOPICS="${{ github.event.inputs.topics }}"
+          TOPIC1=$(echo "$TOPICS" | cut -d',' -f1 | xargs)
+
+          if [ -n "$TOPIC1" ]; then
+            BODY="{\"topic\": \"$TOPIC1\"}"
+          else
+            BODY="{}"
+          fi
+
+          echo "📝 Generating article 1 with: $BODY"
+          curl -s -X POST \
+            "https://tmhlxhkzmssqnptmqzhy.supabase.co/functions/v1/generate-article" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -d "$BODY" \
+            --max-time 120
+          echo ""
+          echo "✅ Article 1 done"
+
+      - name: Wait between articles
+        run: sleep 10
+
+      - name: Generate Article 2
+        run: |
+          TOPICS="${{ github.event.inputs.topics }}"
+          TOPIC2=$(echo "$TOPICS" | cut -d',' -f2 | xargs)
+
+          if [ -n "$TOPIC2" ]; then
+            BODY="{\"topic\": \"$TOPIC2\"}"
+          else
+            BODY="{}"
+          fi
+
+          echo "📝 Generating article 2 with: $BODY"
+          curl -s -X POST \
+            "https://tmhlxhkzmssqnptmqzhy.supabase.co/functions/v1/generate-article" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -d "$BODY" \
+            --max-time 120
+          echo ""
+          echo "✅ Article 2 done"
+
+      - name: Wait between articles
+        run: sleep 10
+
+      - name: Generate Article 3
+        run: |
+          TOPICS="${{ github.event.inputs.topics }}"
+          TOPIC3=$(echo "$TOPICS" | cut -d',' -f3 | xargs)
+
+          if [ -n "$TOPIC3" ]; then
+            BODY="{\"topic\": \"$TOPIC3\"}"
+          else
+            BODY="{}"
+          fi
+
+          echo "📝 Generating article 3 with: $BODY"
+          curl -s -X POST \
+            "https://tmhlxhkzmssqnptmqzhy.supabase.co/functions/v1/generate-article" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -d "$BODY" \
+            --max-time 120
+          echo ""
+          echo "✅ Article 3 done"

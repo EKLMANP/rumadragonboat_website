@@ -73,57 +73,93 @@ export default function ProfilePage() {
         setIsSaving(true);
 
         try {
-            const newAvatarUrl = avatarUrl;
+            let finalAvatarUrl = avatarUrl;
             const trimmedName = displayName.trim();
 
-            // 立即更新本地狀態
-            setAvatarUrl(newAvatarUrl);
-            setAvatarFile(null);
+            // Helper for timeout
+            const withTimeout = (promise, ms = 15000, errorMsg = '請求超時，請檢查網路連線') => {
+                return Promise.race([
+                    promise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+                ]);
+            };
 
-            // 背景上傳頭像 (如果有選擇新頭像)
+            // 1. 上傳頭像 (如果有選擇新頭像)
             if (avatarFile) {
                 const fileExt = avatarFile.name.split('.').pop();
                 const fileName = `${userProfile.id}.${fileExt}`;
                 const filePath = `avatars/${fileName}`;
 
-                supabase.storage
-                    .from('avatars')
-                    .upload(filePath, avatarFile, { upsert: true })
-                    .then(({ error }) => {
-                        if (error) console.warn('頭像上傳失敗:', error.message);
-                        else console.log('頭像上傳完成');
-                    })
-                    .catch(e => console.warn('頭像上傳異常:', e.message));
-            }
+                const { error: uploadError } = await withTimeout(
+                    supabase.storage
+                        .from('avatars')
+                        .upload(filePath, avatarFile, { upsert: true }),
+                    30000, // 上傳給予較長時間 30s
+                    '圖片上傳超時，請稍後再試'
+                );
 
-            // 背景更新 members 表
-            supabase
-                .from('members')
-                .update({ name: trimmedName })
-                .eq('email', userProfile.email)
-                .then(({ error }) => {
-                    if (error) console.warn('Members 更新失敗:', error.message);
-                    else console.log('Members 更新完成');
-                })
-                .catch(e => console.warn('Members 更新異常:', e.message));
-
-            // 背景更新 user_metadata
-            supabase.auth.updateUser({
-                data: {
-                    name: trimmedName,
-                    avatar_url: newAvatarUrl
+                if (uploadError) {
+                    console.warn('頭像上傳失敗:', uploadError.message);
+                    throw new Error('頭像上傳失敗，請稍後再試');
                 }
-            }).then(({ error }) => {
-                if (error) console.warn('Auth metadata 更新失敗:', error.message);
-                else console.log('Auth metadata 更新完成');
-            }).catch(e => console.warn('Auth metadata 更新異常:', e.message));
 
-            // 背景刷新用戶資料
-            if (refreshUserProfile) {
-                setTimeout(() => refreshUserProfile().catch(console.warn), 1000);
+                // 2. 取得公開 URL (加上時間戳記以避免快取)
+                const { data: { publicUrl } } = supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(filePath);
+
+                finalAvatarUrl = `${publicUrl}?t=${new Date().getTime()}`;
+                console.log('New Avatar URL:', finalAvatarUrl);
             }
 
-            // 立即顯示成功
+            // 3. 更新 users/members 表 (同步資料)
+            // 嘗試更新 public.users (或 members) 表中的 avatar_url
+            // 如果 members view 對應 public.users，這一併更新
+            const updates = {
+                name: trimmedName,
+                avatar_url: finalAvatarUrl,
+                updated_at: new Date().toISOString()
+            };
+
+            const { error: dbError } = await withTimeout(
+                supabase
+                    .from('members')
+                    .update(updates)
+                    .eq('email', userProfile.email),
+                10000,
+                '資料更新超時，請稍後再試'
+            );
+
+            if (dbError) {
+                console.warn('Members 更新失敗:', dbError.message);
+                // 不阻擋 metadata 更新，但記錄錯誤
+            }
+
+            // 4. 更新 auth.users metadata (這是 AuthContext 為了快速載入的主要來源)
+            const { error: authError } = await withTimeout(
+                supabase.auth.updateUser({
+                    data: {
+                        name: trimmedName,
+                        avatar_url: finalAvatarUrl
+                    }
+                })
+            );
+
+            if (authError) {
+                console.warn('Auth metadata 更新失敗:', authError.message);
+                throw authError; // Metadata 更新失敗時視為整體失敗
+            }
+
+            // 5. 更新本地狀態
+            setAvatarUrl(finalAvatarUrl);
+            setAvatarFile(null);
+
+            // 6. 觸發 Context 刷新 (不等待，避免因角色查詢超時導致 UI 卡住)
+            if (refreshUserProfile) {
+                refreshUserProfile().catch(err => console.error('Background refresh failed:', err));
+            }
+
+            // 成功提示
             Swal.fire({
                 icon: 'success',
                 title: '成功',
@@ -131,6 +167,7 @@ export default function ProfilePage() {
                 timer: 1500,
                 showConfirmButton: false
             });
+
         } catch (error) {
             console.error('Save error:', error);
             Swal.fire('錯誤', error.message || '儲存失敗', 'error');
