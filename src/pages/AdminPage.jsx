@@ -246,66 +246,6 @@ const AdminPage = () => {
       }
     }
   };
-
-  const loadAuthUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await adminListUsers();
-      if (res.success && res.data?.users) {
-        setAuthUsers(res.data.users);
-      } else {
-        setAuthUsers([]);
-        console.warn('無法載入使用者列表:', res.message);
-      }
-    } catch (e) {
-      console.error('載入 Auth Users 失敗:', e);
-      setAuthUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateAuth = async () => {
-    if (!authForm.email || !authForm.name) {
-      return Swal.fire('請填寫完整資訊', '', 'warning');
-    }
-    setLoading(true);
-    const res = await adminCreateUser(authForm.email, '000000', authForm.name, authForm.role);
-    setLoading(false);
-    if (res.success) {
-      Swal.fire({ icon: 'success', title: '使用者已建立', text: '預設密碼: 000000', timer: 2000 });
-      setAuthForm({ email: '', name: '', role: 'member' });
-      loadAuthUsers();
-    } else {
-      Swal.fire('建立失敗', res.message, 'error');
-    }
-  };
-
-  const handleDeleteAuth = async (userId) => {
-    const confirm = await Swal.fire({
-      title: '確定刪除此使用者?',
-      text: '此操作將無法復原',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消'
-    });
-
-    if (confirm.isConfirmed) {
-      setLoading(true);
-      const res = await adminDeleteUser(userId);
-      setLoading(false);
-      if (res.success) {
-        Swal.fire('已刪除', '', 'success');
-        loadAuthUsers();
-      } else {
-        Swal.fire('刪除失敗', res.message, 'error');
-      }
-    }
-  };
-
-  // ==========================================
   // 3. 邏輯處理 - 隊員管理
   // ==========================================
   const handleNewFormChange = (e) => {
