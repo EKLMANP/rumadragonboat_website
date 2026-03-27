@@ -62,7 +62,65 @@ export default function PracticePage() {
         try {
             const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
 
-            // 1. Try to fetch saved arrangement
+            // 1. Find the activity for this date
+            const { data: activity } = await supabase
+                .from('activities')
+                .select('id')
+                .eq('date', cleanDate)
+                .eq('type', 'boat_practice')
+                .maybeSingle();
+
+            let participants = [];
+
+            if (activity?.id) {
+                // 2. Get all registrations for this activity
+                const { data: regs } = await supabase
+                    .from('activity_registrations')
+                    .select('user_id')
+                    .eq('activity_id', activity.id);
+
+                if (regs && regs.length > 0) {
+                    // 3. Get participant details from members table
+                    const userIds = regs.map(r => r.user_id).filter(Boolean);
+
+                    // Step A: Try to find members by user_id
+                    const { data: membersByUserId } = userIds.length > 0
+                        ? await supabase.from('members')
+                            .select('name, email, weight, position, skill_rating, user_id')
+                            .in('user_id', userIds)
+                        : { data: [] };
+
+                    const foundUserIds = new Set((membersByUserId || []).map(m => m.user_id));
+                    const missingUserIds = userIds.filter(id => !foundUserIds.has(id));
+
+                    // Step B: For missing user_ids, look up their email from auth then match in members
+                    let membersByEmail = [];
+                    if (missingUserIds.length > 0) {
+                        const { data: allAuthUsers } = await supabase.rpc('admin_list_users_with_roles');
+                        const missingEmails = (allAuthUsers || [])
+                            .filter(u => missingUserIds.includes(u.user_id) && u.email)
+                            .map(u => u.email.toLowerCase());
+
+                        if (missingEmails.length > 0) {
+                            const { data: emailMatches } = await supabase.from('members')
+                                .select('name, email, weight, position, skill_rating');
+                            membersByEmail = (emailMatches || []).filter(m =>
+                                m.email && missingEmails.includes(m.email.toLowerCase())
+                            );
+                        }
+                    }
+
+                    const allMembers = [...(membersByUserId || []), ...membersByEmail];
+                    participants = allMembers.map(m => ({
+                        Name: m.name || m.email || 'Unknown',
+                        Weight: m.weight || 0,
+                        Position: m.position || '左右',
+                        Skill_Rating: m.skill_rating || 1,
+                    }));
+                }
+            }
+
+            // 4. Try to fetch saved arrangement snapshot
             const { data: savedData } = await supabase
                 .from('seating_arrangements')
                 .select('boat_data')
@@ -70,25 +128,26 @@ export default function PracticePage() {
                 .maybeSingle();
 
             if (savedData?.boat_data) {
-                // Validate saved data actually has paddlers - skip stale empty records
+                // Validate saved data actually has paddlers
                 const bd = savedData.boat_data;
                 const hasLeftPaddlers = Array.isArray(bd.left) && bd.left.some(p => p !== null);
                 const hasRightPaddlers = Array.isArray(bd.right) && bd.right.some(p => p !== null);
+                
                 if (hasLeftPaddlers || hasRightPaddlers) {
                     // Post-process: resolve any email-as-Name entries to proper member names
                     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    const allPaddlers = [
+                    let allPaddlers = [
                         ...(bd.left || []),
                         ...(bd.right || []),
                         ...(bd.reserve || []),
                         bd.steer, bd.drummer
                     ].filter(Boolean);
+                    
                     const emailNames = allPaddlers
                         .map(p => p.Name || p.name)
                         .filter(n => n && emailPattern.test(n));
 
                     if (emailNames.length > 0) {
-                        // Fetch member names by email (case-insensitive)
                         const { data: memberLookup } = await supabase
                             .from('members')
                             .select('name, email');
@@ -97,7 +156,6 @@ export default function PracticePage() {
                             if (m.email) emailToName[m.email.toLowerCase()] = m.name;
                         });
 
-                        // Replace email names with proper names
                         const fixName = (paddler) => {
                             if (!paddler) return paddler;
                             const pName = paddler.Name || paddler.name;
@@ -115,78 +173,66 @@ export default function PracticePage() {
                         if (bd.reserve) bd.reserve = bd.reserve.map(fixName);
                         if (bd.steer) bd.steer = fixName(bd.steer);
                         if (bd.drummer) bd.drummer = fixName(bd.drummer);
+                        
+                        // Rebuild allPaddlers after name fixes
+                        allPaddlers = [
+                            ...(bd.left || []),
+                            ...(bd.right || []),
+                            ...(bd.reserve || []),
+                            bd.steer, bd.drummer
+                        ].filter(Boolean);
                     }
+
+                    // 👉 CORE FIX: Merge late registrants into empty seats or reserve list!
+                    if (!bd.reserve) bd.reserve = [];
+                    const seatedNames = new Set(allPaddlers.map(p => p.Name || p.name));
+                    
+                    participants.forEach(participant => {
+                        if (!seatedNames.has(participant.Name)) {
+                            let seated = false;
+                            
+                            // 1. Try Steer
+                            if (!bd.steer && participant.Position && participant.Position.includes('舵手')) {
+                                bd.steer = participant;
+                                seated = true;
+                            } 
+                            // 2. Try Drummer
+                            else if (!bd.drummer && participant.Position && participant.Position.includes('鼓手')) {
+                                bd.drummer = participant;
+                                seated = true;
+                            }
+                            
+                            // 3. Try Left
+                            if (!seated && participant.Position && (participant.Position.includes('左') || participant.Position.includes('左右'))) {
+                                const emptyLeftIdx = bd.left.findIndex(seat => seat === null);
+                                if (emptyLeftIdx !== -1) {
+                                    bd.left[emptyLeftIdx] = participant;
+                                    seated = true;
+                                }
+                            }
+                            
+                            // 4. Try Right (if Left failed or only canRight)
+                            if (!seated && participant.Position && (participant.Position.includes('右') || participant.Position.includes('左右'))) {
+                                const emptyRightIdx = bd.right.findIndex(seat => seat === null);
+                                if (emptyRightIdx !== -1) {
+                                    bd.right[emptyRightIdx] = participant;
+                                    seated = true;
+                                }
+                            }
+                            
+                            // 5. Fallback to Reserve
+                            if (!seated && !bd.reserve.some(r => (r.Name || r.name) === participant.Name)) {
+                                bd.reserve.push(participant);
+                            }
+                        }
+                    });
 
                     setSeatingData(bd);
                     return;
                 }
-                // If saved data is empty (no paddlers), fall through to auto-generate from registrations
             }
 
-            // 2. Find the activity for this date
-            const { data: activity } = await supabase
-                .from('activities')
-                .select('id')
-                .eq('date', cleanDate)
-                .eq('type', 'boat_practice')
-                .maybeSingle();
-
-            if (!activity?.id) {
-                setSeatingData(generateSeating([]));
-                return;
-            }
-
-            // 3. Get all registrations for this activity
-            const { data: regs } = await supabase
-                .from('activity_registrations')
-                .select('user_id')
-                .eq('activity_id', activity.id);
-
-            if (!regs || regs.length === 0) {
-                setSeatingData(generateSeating([]));
-                return;
-            }
-
-            // 4. Get participant details from members table
-            // Some members may have NULL user_id, so we need a fallback via email
-            const userIds = regs.map(r => r.user_id).filter(Boolean);
-
-            // Step A: Try to find members by user_id (fast, covers most users)
-            const { data: membersByUserId } = userIds.length > 0
-                ? await supabase.from('members')
-                    .select('name, email, weight, position, skill_rating, user_id')
-                    .in('user_id', userIds)
-                : { data: [] };
-
-            const foundUserIds = new Set((membersByUserId || []).map(m => m.user_id));
-            const missingUserIds = userIds.filter(id => !foundUserIds.has(id));
-
-            // Step B: For missing user_ids, look up their email from auth then match in members
-            let membersByEmail = [];
-            if (missingUserIds.length > 0) {
-                // Get emails from admin_list_users_with_roles for the missing users
-                const { data: allAuthUsers } = await supabase.rpc('admin_list_users_with_roles');
-                const missingEmails = (allAuthUsers || [])
-                    .filter(u => missingUserIds.includes(u.user_id) && u.email)
-                    .map(u => u.email.toLowerCase());
-
-                if (missingEmails.length > 0) {
-                    const { data: emailMatches } = await supabase.from('members')
-                        .select('name, email, weight, position, skill_rating');
-                    membersByEmail = (emailMatches || []).filter(m =>
-                        m.email && missingEmails.includes(m.email.toLowerCase())
-                    );
-                }
-            }
-
-            const allMembers = [...(membersByUserId || []), ...membersByEmail];
-            const participants = allMembers.map(m => ({
-                Name: m.name || m.email || 'Unknown',
-                Weight: m.weight || 0,
-                Position: m.position || '左右',
-                Skill_Rating: m.skill_rating || 1,
-            }));
-
+            // 5. If NO saved snapshot or empty snapshot, generate brand new seating from participants!
             setSeatingData(generateSeating(participants));
         } catch (error) {
             console.error("Error loading seating:", error);

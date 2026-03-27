@@ -996,40 +996,32 @@ const addTrainingRecord = async (params) => {
 
 /**
  * 儲存出席名單（對應 saveAttendance）
- * Stage 1 (fast, awaited): delete + insert attendance records — returns in < 1s
+ * 優化版：使用單一 RPC 呼叫 (save_attendance_batch) 取代串行 delete + insert
+ * 網路往返次數：2 → 1，預計耗時：3-5s → < 500ms
+ *
  * Stage 2 (background, fire-and-forget): award M-points using batched Promise.all
  */
 export const saveAttendance = async (date, attendees) => {
     try {
-        // === STAGE 1: Save attendance (fast path — UI waits for this) ===
-        await supabase
-            .from('attendance')
-            .delete()
-            .eq('practice_date', date);
+        const uniqueAttendees = [...new Set(attendees || [])];
 
-        if (attendees && attendees.length > 0) {
-            const uniqueAttendees = [...new Set(attendees)];
+        // === STAGE 1: 單一 RPC 完成 delete + insert（UI 等待此步驟）===
+        const { error } = await supabase.rpc('save_attendance_batch', {
+            p_date: date,
+            p_names: uniqueAttendees
+        });
 
-            const inserts = uniqueAttendees.map(name => ({
-                member_name: name,
-                practice_date: date
-            }));
+        if (error) {
+            return { success: false, message: error.message };
+        }
 
-            const { error } = await supabase
-                .from('attendance')
-                .insert(inserts);
-
-            if (error) {
-                return { success: false, message: error.message };
-            }
-
-            // === STAGE 2: Award M-points in background (fire-and-forget, never blocks UI) ===
+        // === STAGE 2: Award M-points in background (fire-and-forget, never blocks UI) ===
+        if (uniqueAttendees.length > 0) {
             awardPointsForAttendance(date, uniqueAttendees).catch(err =>
-                console.error('Background M-point awarding failed:', err)
+                console.warn('Background M-point awarding failed:', err)
             );
         }
 
-        // Return immediately — M-points run in the background
         return { success: true };
     } catch (error) {
         console.error("Error saving attendance:", error);

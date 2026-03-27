@@ -205,6 +205,35 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
           </div>
         </div>
 
+        {/* 候補名單區塊 (Reserve List) - Only show in Edit mode (CoachPage) inside the image */}
+        {isEditable && (
+          <div className="w-full mt-6 pt-6 border-t-2 border-dashed border-gray-200">
+            <h3 className="text-sm font-bold text-gray-500 mb-3 flex items-center justify-between">
+              <span>候補名單 / 未排入 (Reserve)</span>
+              <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                {(boatData.reserve && boatData.reserve.length) || 0} 人
+              </span>
+            </h3>
+            
+            {(!boatData.reserve || boatData.reserve.length === 0) ? (
+              <div className="w-full bg-gray-50 border border-gray-100 rounded-lg p-3 text-center text-gray-400 text-xs font-medium">
+                目前全數排入座位，無候補人員 (No reserves)
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {boatData.reserve.map((user, idx) => (
+                  <div 
+                    key={`reserve-img-${idx}`} 
+                    className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-700 flex items-center gap-1"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                    {user.Name || user.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <button
