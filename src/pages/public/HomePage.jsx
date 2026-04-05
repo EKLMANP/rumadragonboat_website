@@ -296,8 +296,8 @@ export default function HomePage() {
                 {/* Right: Image */}
                 <div className="relative h-80 md:h-auto overflow-hidden order-1 md:order-2">
                     <img
-                        src="/Landing page2.jpg"
-                        alt="RUMA Action"
+                        src="/website-banner-v2.png"
+                        alt="RUMA Dragon Boat Team"
                         onError={(e) => { e.target.src = '/banner.jpg'; }}
                         className="w-full h-full object-cover min-h-[400px] transition-transform duration-700 hover:scale-105"
                     />
