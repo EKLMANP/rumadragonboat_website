@@ -1175,7 +1175,7 @@ export const adminCreateUser = async (email, password, name, role) => {
             body: {
                 action: 'create_user',
                 email,
-                password: password || '000000',
+                password: password,
                 name,
                 role
             }

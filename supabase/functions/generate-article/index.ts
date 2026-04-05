@@ -138,7 +138,7 @@ serve(async (req) => {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
     const chatId = Deno.env.get("TELEGRAM_CHAT_ID") ?? "";
     const previewSecret = Deno.env.get("PREVIEW_SECRET") ?? "";
-    const rumasite = "https://uat.rumadragonboat.com";
+    const rumasite = "https://rumadragonboat.com";
 
     if (!geminiKey) {
         return new Response(JSON.stringify({ error: "GOOGLE_AI_STUDIO_API_KEY not set" }), { status: 500 });

@@ -80,7 +80,7 @@ serve(async (req) => {
                 console.log('Creating new user:', body.email);
                 const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
                     email: body.email,
-                    password: body.password || '000000',
+                    password: body.password || crypto.randomUUID(),
                     email_confirm: true,
                     user_metadata: { name: body.name }
                 });
