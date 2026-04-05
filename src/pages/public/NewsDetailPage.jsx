@@ -156,6 +156,9 @@ export default function NewsDetailPage() {
                             src={news.cover_image}
                             alt={displayTitle}
                             referrerPolicy="no-referrer"
+                            loading="eager"
+                            decoding="async"
+                            fetchPriority="high"
                             className="w-full h-full object-cover"
                             style={{ filter: 'brightness(0.4)' }}
                         />
