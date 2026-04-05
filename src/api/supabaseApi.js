@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
  * @param {number} ms - 超時毫秒數
  * @param {*} fallback - 超時時的回傳值
  */
-const withTimeout = async (promise, ms = 8000, fallback = null) => {
+const withTimeout = async (promise, ms = 12000, fallback = null) => {
     let timeoutId;
     const timeoutPromise = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
@@ -199,7 +199,7 @@ export const fetchAttendance = async () => {
     try {
         const result = await withTimeout(
             supabase.from('attendance').select('*'),
-            6000,
+            10000,
             { data: [], error: null }
         );
 
@@ -236,7 +236,7 @@ export const fetchActivities = async (upcomingOnly = false) => {
 
         const result = await withTimeout(
             query,
-            5000,
+            10000,
             { data: [], error: null }
         );
 
@@ -278,7 +278,7 @@ export const fetchActivityRegistrations = async (userOnly = false, upcomingOnly 
 
         const result = await withTimeout(
             query,
-            6000,
+            10000,
             { data: [], error: null }
         );
 
@@ -1141,7 +1141,7 @@ export const adminListUsers = async () => {
     try {
         const result = await withTimeout(
             supabase.rpc('admin_list_users_with_roles'),
-            5000, // RPC 可以稍長一點
+            15000, // RPC 需要較長時間（查詢 auth.users + join roles）
             null
         );
 
@@ -1433,7 +1433,7 @@ export const fetchNews = async ({ category, search, limit = 20 } = {}) => {
 
         const result = await withTimeout(
             query,
-            5000,
+            10000,
             { data: [], error: null }
         );
 
@@ -1517,7 +1517,7 @@ export const fetchAllNews = async () => {
                 .from('news')
                 .select('*')
                 .order('created_at', { ascending: false }),
-            5000,
+            10000,
             { data: [], error: null }
         );
 

@@ -67,7 +67,7 @@ export function AuthProvider({ children }) {
                 const queryPromise = supabase.rpc('get_my_roles');
 
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Role query timeout')), 5000); // 5s timeout
+                    setTimeout(() => reject(new Error('Role query timeout')), 10000); // 10s timeout
                 });
 
                 const { data, error } = await Promise.race([queryPromise, timeoutPromise]);

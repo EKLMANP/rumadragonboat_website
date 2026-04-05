@@ -6,11 +6,25 @@ export default function NewsContentRenderer({ content }) {
 
     const renderTextWithLinks = (text) => {
         if (!text) return null;
-        // Split by bold (**...**) and links ([...](...))
-        // Regex explanation:
-        // (\*\*.*?\*\*) matches **bold**
-        // (\[[^\]]+\]\([^)]+\)) matches [link](url)
-        return text.split(/(\*\*.*?\*\*|\[[^\]]+\]\([^)]+\))/g).map((part, i) => {
+
+        // Step 1: Strip HTML tags and convert common HTML to readable text
+        const cleanText = text
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<p[^>]*>/gi, '')
+            .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+            .replace(/<b>(.*?)<\/b>/gi, '**$1**')
+            .replace(/<em>(.*?)<\/em>/gi, '*$1*')
+            .replace(/<i>(.*?)<\/i>/gi, '*$1*')
+            .replace(/<a\s+href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+            .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '$1')
+            .replace(/<li>(.*?)<\/li>/gi, '- $1\n')
+            .replace(/<ul[^>]*>|<\/ul>/gi, '')
+            .replace(/<ol[^>]*>|<\/ol>/gi, '')
+            .replace(/<[^>]+>/g, ''); // Remove any remaining HTML tags
+
+        // Step 2: Parse markdown bold and links
+        return cleanText.split(/(\*\*.*?\*\*|\[[^\]]+\]\([^)]+\))/g).map((part, i) => {
             // Check for Bold
             const boldMatch = part.match(/^\*\*(.*?)\*\*$/);
             if (boldMatch) {
@@ -66,6 +80,8 @@ export default function NewsContentRenderer({ content }) {
                             src={block.url}
                             alt={block.alt || block.caption || ''}
                             referrerPolicy="no-referrer"
+                            loading="lazy"
+                            decoding="async"
                             className="w-full rounded-lg"
                         />
                         {block.caption && (
@@ -82,6 +98,7 @@ export default function NewsContentRenderer({ content }) {
                             src={block.url}
                             title={block.caption || 'Video'}
                             className="w-full h-full rounded-lg"
+                            loading="lazy"
                             sandbox="allow-scripts allow-same-origin allow-popups"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
@@ -92,7 +109,7 @@ export default function NewsContentRenderer({ content }) {
                 return (
                     <blockquote key={index} className="border-l-4 border-red-600 pl-6 py-2 my-8 italic">
                         <p className="text-xl text-red-400 font-medium">
-                            "{block.text}"
+                            "{renderTextWithLinks(block.text)}"
                         </p>
                         {block.author && (
                             <cite className="text-gray-500 not-italic mt-2 block">
