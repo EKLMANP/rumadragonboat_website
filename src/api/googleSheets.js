@@ -1,8 +1,14 @@
 // src/api/googleSheets.js
 
-// ⚠️⚠️⚠️ 請確認這串 URL 是你最新的 Google Script 部署網址 ⚠️⚠️⚠️
-// (去 Google Apps Script -> 部署 -> 管理部署 -> 複製網頁應用程式網址)
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7---INM12kQvRJ7n3xEbN2M_RKmyEInqIqlO9pOIZ2guMui0TStaAOIBdm7Hhr4w3/exec';
+// Google Apps Script URL - 從環境變數讀取，請在 Vercel 環境變數設定 VITE_GOOGLE_SCRIPT_URL
+const SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+
+if (!SCRIPT_URL) {
+    console.warn(
+        '⚠️ VITE_GOOGLE_SCRIPT_URL 環境變數未設定。\n' +
+        '請在 Vercel Dashboard → Settings → Environment Variables 新增此變數。'
+    );
+}
 
 // 1. 取得使用者
 export const fetchUsers = async () => {

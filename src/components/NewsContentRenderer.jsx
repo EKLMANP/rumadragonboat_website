@@ -82,6 +82,7 @@ export default function NewsContentRenderer({ content }) {
                             src={block.url}
                             title={block.caption || 'Video'}
                             className="w-full h-full rounded-lg"
+                            sandbox="allow-scripts allow-same-origin allow-popups"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
                         />

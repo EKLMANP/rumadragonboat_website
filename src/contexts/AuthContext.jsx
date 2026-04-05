@@ -36,47 +36,22 @@ export function AuthProvider({ children }) {
     const [initialized, setInitialized] = useState(false);
     const loadingRef = useRef(false);
 
-    // EMAIL_ROLE_MAP has been removed for security reasons.
-    // Roles are now exclusively fetched from the backend RPC function 'get_my_roles'
-    // or loaded from local storage cache.
-
     // 取得使用者的角色列表
+    // Roles are fetched from: memory cache → localStorage → backend RPC 'get_my_roles'
     const fetchUserRoles = useCallback(async (userId, email = null) => {
-        // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
-        // 已知管理者 Email 速查表 (優先於資料庫查詢，提供即時回應)
-        const EMAIL_ROLE_MAP = {
-            'rumadragonboat@gmail.com': [ROLES.ADMIN],
-            'kenny.chen.tpe@gmail.com': [ROLES.MANAGEMENT],
-            'n79928@gmail.com': [ROLES.MANAGEMENT],
-            'tanpennee9307@gmail.com': [ROLES.MANAGEMENT],
-            'irene.c0102@gmail.com': [ROLES.MANAGEMENT]
-        };
-
         try {
             // 1. 優先檢查記憶體快取 (最快)
             if (roleCache.has(userId)) {
-                console.log('使用快取的角色:', roleCache.get(userId));
+                if (import.meta.env.DEV) console.log('使用快取的角色:', roleCache.get(userId));
                 return roleCache.get(userId);
             }
 
-            // 2. 檢查 Email 速查表 (即時回應，不等資料庫)
-            if (email) {
-                const emailLower = email.toLowerCase();
-                if (EMAIL_ROLE_MAP[emailLower]) {
-                    const roles = EMAIL_ROLE_MAP[emailLower];
-                    console.log('使用 Email 速查角色:', roles);
-                    roleCache.set(userId, roles);
-                    localStorage.setItem(`user_roles_${userId}`, JSON.stringify(roles));
-                    return roles;
-                }
-            }
-
-            // 3. 檢查 localStorage 快取
+            // 2. 檢查 localStorage 快取
             const cached = localStorage.getItem(`user_roles_${userId}`);
             if (cached) {
                 try {
                     const cachedRoles = JSON.parse(cached);
-                    console.log('使用 localStorage 快取的角色:', cachedRoles);
+                    if (import.meta.env.DEV) console.log('使用 localStorage 快取的角色:', cachedRoles);
                     roleCache.set(userId, cachedRoles);
                     return cachedRoles;
                 } catch (e) {
@@ -118,7 +93,7 @@ export function AuthProvider({ children }) {
                 localStorage.setItem(`user_roles_${userId}`, JSON.stringify(finalRoles));
             }
 
-            console.log('最終角色:', finalRoles, querySuccess ? '(已快取)' : '(未快取-fallback)');
+            if (import.meta.env.DEV) console.log('最終角色:', finalRoles, querySuccess ? '(已快取)' : '(未快取-fallback)');
             return finalRoles;
         } catch (err) {
             console.warn('取得使用者角色錯誤:', err.message);
@@ -132,16 +107,6 @@ export function AuthProvider({ children }) {
                     console.warn('解析快取角色失敗:', e);
                 }
             }
-
-            // 最終備援邏輯移除，預設為會員
-            /*
-            if (email && EMAIL_ROLE_MAP[email]) {
-                const fallbackRoles = EMAIL_ROLE_MAP[email];
-                roleCache.set(userId, fallbackRoles);
-                localStorage.setItem(`user_roles_${userId}`, JSON.stringify(fallbackRoles));
-                return fallbackRoles;
-            }
-            */
 
             return [ROLES.MEMBER];
         }
@@ -206,7 +171,7 @@ export function AuthProvider({ children }) {
 
         // 防止同一用戶的重複並發載入 (僅限非強制重載)
         if (!forceReload && loadingRef.current === authUser.id) {
-            console.log('跳過重複載入:', authUser.email);
+            if (import.meta.env.DEV) console.log('跳過重複載入:', authUser.email);
             return;
         }
         loadingRef.current = authUser.id;
@@ -230,7 +195,7 @@ export function AuthProvider({ children }) {
 
                 if (cachedRoles) {
                     setUserRoles(cachedRoles);
-                    console.log('使用快取角色:', cachedRoles);
+                    if (import.meta.env.DEV) console.log('使用快取角色:', cachedRoles);
                 }
             }
 
@@ -249,7 +214,6 @@ export function AuthProvider({ children }) {
             };
 
             setUserProfile(finalProfile);
-            setUserRoles(roles);
             setUserRoles(roles);
             if (import.meta.env.DEV) console.log('載入完成 - email:', authUser.email, '角色:', roles);
         } finally {
@@ -290,7 +254,7 @@ export function AuthProvider({ children }) {
                         const roles = await fetchUserRoles(session.user.id, session.user.email);
                         if (isMounted) {
                             setUserRoles(roles);
-                            console.log('初始化角色完成:', roles);
+                            if (import.meta.env.DEV) console.log('初始化角色完成:', roles);
                         }
 
                         // 背景載入完整 profile
@@ -322,14 +286,14 @@ export function AuthProvider({ children }) {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('Auth 狀態變化:', event, session?.user?.email);
+                if (import.meta.env.DEV) console.log('Auth 狀態變化:', event, session?.user?.email);
 
                 if (!isMounted) return;
 
                 // INITIAL_SESSION 是頁面載入時 Supabase 發送的第一個事件
                 // 如果已經在 initAuth 中處理過，則跳過
                 if (event === 'INITIAL_SESSION') {
-                    console.log('跳過 INITIAL_SESSION - 已在 initAuth 中處理');
+                    if (import.meta.env.DEV) console.log('跳過 INITIAL_SESSION - 已在 initAuth 中處理');
                     if (session?.user) {
                         lastProcessedUserId = session.user.id;
                     }
@@ -344,7 +308,7 @@ export function AuthProvider({ children }) {
 
                     // 防止重複處理同一個用戶 (但不影響全新登入)
                     if (lastProcessedUserId === session.user.id && user?.id === session.user.id) {
-                        console.log('跳過重複 SIGNED_IN 事件');
+                        if (import.meta.env.DEV) console.log('跳過重複 SIGNED_IN 事件');
                         return;
                     }
                     lastProcessedUserId = session.user.id;
@@ -366,17 +330,17 @@ export function AuthProvider({ children }) {
                     const roles = await fetchUserRoles(session.user.id, session.user.email);
                     setUserRoles(roles);
                     setLoading(false);
-                    console.log('登入後查詢角色:', roles);
+                    if (import.meta.env.DEV) console.log('登入後查詢角色:', roles);
                 } else if (event === 'SIGNED_OUT') {
                     // 確認真的是登出，而不是誤發
                     // 檢查是否有有效 session
                     const { data: { session: currentSession } } = await supabase.auth.getSession();
                     if (currentSession?.user) {
-                        console.log('忽略虛假 SIGNED_OUT - session 仍然有效');
+                        if (import.meta.env.DEV) console.log('忽略虛假 SIGNED_OUT - session 仍然有效');
                         return;
                     }
 
-                    console.log('執行真正登出');
+                    if (import.meta.env.DEV) console.log('執行真正登出');
                     roleCache.clear();
                     loadingRef.current = null;
                     lastProcessedUserId = null;

@@ -292,7 +292,7 @@ async function handlePublish(
     await sendTelegramMessage(botToken, chatId,
         `🚀 *文章已正式發布（UAT）！*\n\n` +
         `📌 ${article.title}\n` +
-        `🔗 https://uat.rumadragonboat.com/news/${article.slug}\n` +
+        `🔗 https://rumadragonboat.com/news/${article.slug}\n` +
         `📊 GA 將從現在開始追蹤流量表現`
     );
 }
