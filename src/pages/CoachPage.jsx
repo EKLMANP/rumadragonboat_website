@@ -910,6 +910,12 @@ const CoachPage = () => {
     const person2 = getPerson(pos2);
     setPerson(pos1, person2);
     setPerson(pos2, person1);
+
+    // Clean up null entries from reserve array after swap
+    if (boat.reserve) {
+      boat.reserve = boat.reserve.filter(p => p !== null);
+    }
+
     setSeatingCharts(newCharts);
 
     // 🔥 Sync to DB on Swap

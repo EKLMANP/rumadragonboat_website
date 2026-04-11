@@ -52,6 +52,10 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
             clonedElement.style.height = 'auto';
             clonedElement.style.overflow = 'visible';
           }
+          // Ensure drummer/steer circle names are not clipped
+          clonedDoc.querySelectorAll('.rounded-full').forEach(el => {
+            el.style.overflow = 'visible';
+          });
         }
       });
       const link = document.createElement('a');
@@ -133,7 +137,7 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
                    w-24 h-24 bg-gradient-to-br from-red-50 to-red-100 
                    border-4 border-red-400 rounded-full 
                    flex flex-col items-center justify-center shadow-lg relative 
-                   transition-all cursor-pointer overflow-hidden
+                   transition-all cursor-pointer
                    ${isDrummerSelected ? 'ring-4 ring-orange-500 scale-110 z-20 shadow-xl' : ''} 
                    ${isEditable ? 'hover:brightness-95 hover:scale-105' : ''}
                 `}
@@ -141,7 +145,7 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
               {/* 修正：文字置中與大小微調 */}
               <span className="font-black text-[9px] text-red-700 uppercase tracking-widest leading-none mb-0.5 mt-1">DRUMMER</span>
               <span className="font-black text-xs text-red-700 uppercase tracking-widest leading-none">鼓手</span>
-              <span className="font-extrabold text-lg text-gray-800 text-center leading-tight px-1 mt-1 truncate w-full">
+              <span className="font-extrabold text-sm text-gray-800 text-center leading-tight px-1 mt-0.5 w-full">
                 {boatData.drummer ? boatData.drummer.Name : "?"}
               </span>
             </div>
@@ -199,7 +203,7 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
           >
             <span className="font-black text-[9px] text-yellow-700 uppercase tracking-widest leading-none mb-0.5 mt-1">STEER</span>
             <span className="font-black text-xs text-yellow-700 uppercase tracking-widest leading-none">舵手</span>
-            <span className="font-extrabold text-lg text-gray-800 text-center leading-tight px-1 mt-1 truncate w-full">
+            <span className="font-extrabold text-sm text-gray-800 text-center leading-tight px-1 mt-0.5 w-full">
               {boatData.steer ? boatData.steer.Name : "?"}
             </span>
           </div>
