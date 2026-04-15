@@ -1915,24 +1915,39 @@ export const addReward = async (params) => {
 };
 
 /**
- * 刪除兌換商品
+ * 下架兌換商品（軟刪除，設定 is_active = false）
  * @param {string} id - 商品 ID
  */
-/**
- * 刪除兌換商品
- * @param {string} id - 商品 ID
- */
-export const deleteReward = async (id) => {
+export const archiveReward = async (id) => {
     try {
         const { error } = await supabase
             .from('redeemable_products')
-            .delete()
+            .update({ is_active: false, updated_at: new Date().toISOString() })
             .eq('id', id);
 
         if (error) throw error;
         return { success: true };
     } catch (error) {
-        console.error('Error deleting reward:', error);
+        console.error('Error archiving reward:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 重新上架兌換商品（設定 is_active = true）
+ * @param {string} id - 商品 ID
+ */
+export const restoreReward = async (id) => {
+    try {
+        const { error } = await supabase
+            .from('redeemable_products')
+            .update({ is_active: true, updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error restoring reward:', error);
         return { success: false, message: error.message };
     }
 };
@@ -1991,13 +2006,21 @@ export const updateReward = async (params) => {
 
 /**
  * 取得可兌換商品列表
+ * @param {Object} options
+ * @param {boolean} options.includeArchived - 是否包含已下架商品（管理員用），預設 false
  */
-export const fetchRewards = async () => {
+export const fetchRewards = async ({ includeArchived = false } = {}) => {
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('redeemable_products')
             .select('*')
             .order('created_at', { ascending: false });
+
+        if (!includeArchived) {
+            query = query.eq('is_active', true);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
