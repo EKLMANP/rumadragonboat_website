@@ -7,10 +7,10 @@ import {
   Users, Calendar, ClipboardList, CheckCircle,
   ChevronLeft, ChevronRight, Search, Filter,
   MapPin, Clock, Edit, Trash2, Plus, X,
-  AlertCircle, ChevronDown, Check, Zap, Lock, Save, Dumbbell, Megaphone, Newspaper, BarChart3, Trophy, ListChecks, Loader2, Gift, Info, ChevronUp
+  AlertCircle, ChevronDown, Check, Zap, Lock, Save, Dumbbell, Megaphone, Newspaper, BarChart3, Trophy, ListChecks, Loader2, Gift, Info, ChevronUp, Archive, RotateCcw
 } from 'lucide-react';
 // API
-import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchActivities, fetchActivityRegistrations, fetchAnnouncements, fetchDates, adminListUsers, saveSeatingArrangement, awardFitnessAttendance, fetchFitnessHistory, addReward, updateReward, deleteReward, fetchRewards, fetchRedemptionRecords, updateRedemptionStatus } from '../api/supabaseApi';
+import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchActivities, fetchActivityRegistrations, fetchAnnouncements, fetchDates, adminListUsers, saveSeatingArrangement, awardFitnessAttendance, fetchFitnessHistory, addReward, updateReward, archiveReward, restoreReward, fetchRewards, fetchRedemptionRecords, updateRedemptionStatus } from '../api/supabaseApi';
 import { generateSeating } from '../utils/seatingLogic';
 import SeatVisualizer from '../components/SeatVisualizer';
 import AppLayout from '../components/AppLayout';
@@ -188,27 +188,52 @@ const CoachPage = () => {
     if (fileInput) fileInput.value = '';
   };
 
-  const handleDeleteReward = async (id, name) => {
+  const handleArchiveReward = async (id, name) => {
     const result = await Swal.fire({
-      title: lang === 'zh' ? '確定刪除？' : 'Delete Reward?',
-      text: lang === 'zh' ? `確定要刪除「${name}」嗎？此動作無法復原。` : `Delete "${name}"? This cannot be undone.`,
+      title: lang === 'zh' ? '確定下架？' : 'Archive Reward?',
+      text: lang === 'zh' ? `確定要下架「${name}」嗎？下架後隊員將無法兌換此項目，但兌換紀錄會保留。` : `Archive "${name}"? Members won't be able to redeem it, but redemption records will be preserved.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: lang === 'zh' ? '是的，刪除' : 'Yes, Delete',
+      confirmButtonColor: '#f59e0b',
+      confirmButtonText: lang === 'zh' ? '是的，下架' : 'Yes, Archive',
       cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
 
     if (result.isConfirmed) {
       setLoading(true);
-      const res = await deleteReward(id);
+      const res = await archiveReward(id);
       setLoading(false);
 
       if (res.success) {
-        Swal.fire('已刪除', lang === 'zh' ? '該項目已成功刪除' : 'Reward deleted', 'success');
+        Swal.fire(lang === 'zh' ? '已下架' : 'Archived', lang === 'zh' ? '該項目已成功下架' : 'Reward archived', 'success');
         loadRewards();
       } else {
-        Swal.fire('刪除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '下架失敗' : 'Archive Failed', res.message, 'error');
+      }
+    }
+  };
+
+  const handleRestoreReward = async (id, name) => {
+    const result = await Swal.fire({
+      title: lang === 'zh' ? '確定重新上架？' : 'Restore Reward?',
+      text: lang === 'zh' ? `確定要重新上架「${name}」嗎？` : `Restore "${name}"? Members will be able to redeem it again.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      confirmButtonText: lang === 'zh' ? '是的，上架' : 'Yes, Restore',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      setLoading(true);
+      const res = await restoreReward(id);
+      setLoading(false);
+
+      if (res.success) {
+        Swal.fire(lang === 'zh' ? '已上架' : 'Restored', lang === 'zh' ? '該項目已重新上架' : 'Reward restored', 'success');
+        loadRewards();
+      } else {
+        Swal.fire(lang === 'zh' ? '上架失敗' : 'Restore Failed', res.message, 'error');
       }
     }
   };
@@ -351,7 +376,7 @@ const CoachPage = () => {
   }, [activeTab]);
 
   const loadRewards = async () => {
-    const data = await fetchRewards();
+    const data = await fetchRewards({ includeArchived: true });
     setRewards(data);
   };
 
@@ -1805,7 +1830,13 @@ const CoachPage = () => {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {rewards.map((reward) => (
-                        <div key={reward.id} className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden flex flex-col h-full group hover:shadow-lg transition-shadow duration-300 relative">
+                        <div key={reward.id} className={`bg-white rounded-xl shadow border overflow-hidden flex flex-col h-full group hover:shadow-lg transition-shadow duration-300 relative ${!reward.is_active ? 'border-amber-200 opacity-70' : 'border-gray-100'}`}>
+                          {/* Archived Badge */}
+                          {!reward.is_active && (
+                            <div className="absolute top-2 left-2 z-20 bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full">
+                              {lang === 'zh' ? '已下架' : 'Archived'}
+                            </div>
+                          )}
                           {/* Admin Actions */}
                           <div className="absolute top-2 right-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 p-1 rounded-lg backdrop-blur-sm shadow-sm">
                             <button
@@ -1815,13 +1846,23 @@ const CoachPage = () => {
                             >
                               <Edit size={16} />
                             </button>
-                            <button
-                              onClick={() => handleDeleteReward(reward.id, reward.name)}
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"
-                              title={lang === 'zh' ? '刪除' : 'Delete'}
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {reward.is_active ? (
+                              <button
+                                onClick={() => handleArchiveReward(reward.id, reward.name)}
+                                className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-md transition"
+                                title={lang === 'zh' ? '下架' : 'Archive'}
+                              >
+                                <Archive size={16} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleRestoreReward(reward.id, reward.name)}
+                                className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-md transition"
+                                title={lang === 'zh' ? '重新上架' : 'Restore'}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
                           </div>
 
                           <div className="h-48 bg-gray-50 relative overflow-hidden flex items-center justify-center">
