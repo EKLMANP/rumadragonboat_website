@@ -26,9 +26,12 @@ export default function AnnouncementsNewsPage() {
     const loadPageData = async () => {
         setLoading(true);
         try {
+            // 出席紀錄僅撈當月（排行榜只需本月）
+            const now = new Date();
+            const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
             const [newsData, attData, mPointLeaderboard] = await Promise.all([
                 fetchAnnouncements(),
-                fetchAttendance(),
+                fetchAttendance({ startDate: monthStart }),
                 fetchMPointLeaderboard()
             ]);
 

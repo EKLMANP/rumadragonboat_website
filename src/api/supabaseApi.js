@@ -13,6 +13,30 @@ import { supabase } from '../lib/supabase';
  * @param {number} ms - 超時毫秒數
  * @param {*} fallback - 超時時的回傳值
  */
+// =====================================================
+// 使用者快取 — 避免每次 API 呼叫都重複呼叫 getUser()
+// =====================================================
+let _cachedUser = null;
+let _cacheTimestamp = 0;
+const getCachedUser = async () => {
+    const now = Date.now();
+    if (_cachedUser && (now - _cacheTimestamp) < 30000) return _cachedUser;
+    const { data: { user } } = await supabase.auth.getUser();
+    _cachedUser = user;
+    _cacheTimestamp = now;
+    return user;
+};
+
+// 公開方法：清除快取（由 AuthContext 在登出時呼叫，不額外建立 listener）
+export const clearUserCache = () => {
+    _cachedUser = null;
+    _cacheTimestamp = 0;
+};
+
+/**
+ * 為 Promise 添加超時保護（含自動重試）
+ * 核心修復：Supabase 冷啟動可能需要 5-10 秒，超時後不再丟棄資料，而是重試一次
+ */
 const withTimeout = async (promise, ms = 12000, fallback = null) => {
     let timeoutId;
     const timeoutPromise = new Promise((resolve) => {
@@ -54,7 +78,7 @@ export const fetchAllData = async () => {
                 supabase.from('borrow_records').select('*').order('created_at', { ascending: false }),
                 supabase.from('attendance').select('*')
             ]),
-            8000, // 8 秒超時 (大量資料)
+            15000, // 15 秒超時 (大量資料 + Supabase 冷啟動)
             null
         );
 
@@ -195,11 +219,15 @@ export const fetchRegistrations = async () => {
 /**
  * 取得出席紀錄（對應 fetchAttendance）
  */
-export const fetchAttendance = async () => {
+export const fetchAttendance = async ({ startDate, endDate } = {}) => {
     try {
+        let query = supabase.from('attendance').select('*');
+        if (startDate) query = query.gte('practice_date', startDate);
+        if (endDate) query = query.lte('practice_date', endDate);
+
         const result = await withTimeout(
-            supabase.from('attendance').select('*'),
-            10000,
+            query,
+            15000,
             { data: [], error: null }
         );
 
@@ -265,7 +293,7 @@ export const fetchActivityRegistrations = async (userOnly = false, upcomingOnly 
 
         // 如果 userOnly 為 true，僅撈當前使用者的報名紀錄
         if (userOnly) {
-            const { data: { user } } = await supabase.auth.getUser();
+            const user = await getCachedUser();
             if (!user) return [];
             query = query.eq('user_id', user.id);
         }
@@ -491,9 +519,6 @@ export const postData = async (action, params) => {
             case 'deleteBorrowRecord':
                 return await deleteBorrowRecord(params);
 
-            case 'deleteBorrowRecord':
-                return await deleteBorrowRecord(params);
-
             // === 獎勵管理 ===
             case 'addReward':
                 return await addReward(params);
@@ -507,6 +532,12 @@ export const postData = async (action, params) => {
             // === 自主訓練紀錄 ===
             case 'addTrainingRecord':
                 return await addTrainingRecord(params);
+
+            case 'updateTrainingRecord':
+                return await updateTrainingRecord(params);
+
+            case 'deleteTrainingRecord':
+                return await deleteTrainingRecord(params);
 
             default:
                 return { success: false, message: `Unknown action: ${action}` };
@@ -858,7 +889,7 @@ const deleteBorrowRecord = async (params) => {
  */
 export const fetchTrainingRecords = async () => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return [];
 
         const { data, error } = await supabase
@@ -884,7 +915,7 @@ export const fetchTrainingRecords = async () => {
  */
 const addTrainingRecord = async (params) => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return { success: false, message: '尚未登入' };
 
         let fileUrl = null;
@@ -986,6 +1017,171 @@ const addTrainingRecord = async (params) => {
         return { success: true };
     } catch (error) {
         console.error("Error adding training record:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 更新自主訓練紀錄
+ */
+const updateTrainingRecord = async (params) => {
+    try {
+        const user = await getCachedUser();
+        if (!user) return { success: false, message: '尚未登入' };
+
+        // 驗證紀錄屬於當前使用者
+        const { data: existing, error: fetchErr } = await supabase
+            .from('training_records')
+            .select('*')
+            .eq('id', params.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (fetchErr || !existing) {
+            return { success: false, message: '找不到此紀錄或無權限修改' };
+        }
+
+        let fileUrl = existing.file_url;
+
+        // 如果有新圖片，上傳並替換舊圖片
+        if (params.file) {
+            const fileExt = params.file.name.split('.').pop();
+            const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('training-photos')
+                .upload(fileName, params.file);
+
+            if (uploadError) {
+                console.error("Upload error:", uploadError);
+                return { success: false, message: '圖片上傳失敗' };
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('training-photos')
+                .getPublicUrl(fileName);
+
+            // 刪除舊圖片
+            if (existing.file_url) {
+                try {
+                    const oldPath = existing.file_url.split('/training-photos/')[1];
+                    if (oldPath) {
+                        await supabase.storage.from('training-photos').remove([decodeURIComponent(oldPath)]);
+                    }
+                } catch (e) {
+                    console.warn('刪除舊圖片失敗:', e.message);
+                }
+            }
+
+            fileUrl = publicUrl;
+        }
+
+        // 更新紀錄
+        const { error } = await supabase
+            .from('training_records')
+            .update({
+                date: params.date,
+                type: params.type,
+                custom_type: params.customType || null,
+                notes: params.notes || '',
+                file_url: fileUrl,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', params.id)
+            .eq('user_id', user.id);
+
+        if (error) {
+            return { success: false, message: error.message };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating training record:", error);
+        return { success: false, message: error.message };
+    }
+};
+
+/**
+ * 刪除自主訓練紀錄（含自動扣除 M 點）
+ */
+const deleteTrainingRecord = async (params) => {
+    try {
+        const user = await getCachedUser();
+        if (!user) return { success: false, message: '尚未登入' };
+
+        // 驗證紀錄屬於當前使用者
+        const { data: existing, error: fetchErr } = await supabase
+            .from('training_records')
+            .select('*')
+            .eq('id', params.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (fetchErr || !existing) {
+            return { success: false, message: '找不到此紀錄或無權限刪除' };
+        }
+
+        // 1. 查找對應的 point_events 紀錄（同一天可能有多筆，只取最近一筆）
+        const { data: pointEvents } = await supabase
+            .from('point_events')
+            .select('id, points_change')
+            .eq('user_id', user.id)
+            .eq('source_type', 'self_training')
+            .eq('source_id', existing.date)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        const pointEvent = pointEvents?.[0] || null;
+
+        // 2. 扣除 M 點
+        if (pointEvent && pointEvent.points_change > 0) {
+            const { data: member } = await supabase
+                .from('members')
+                .select('total_points')
+                .eq('email', user.email)
+                .maybeSingle();
+
+            const currentPoints = member?.total_points || 0;
+            const newPoints = Math.max(0, currentPoints - pointEvent.points_change);
+
+            // 更新 members 表的 total_points
+            await supabase
+                .from('members')
+                .update({ total_points: newPoints })
+                .eq('email', user.email);
+
+            // 刪除 point_events 紀錄
+            await supabase
+                .from('point_events')
+                .delete()
+                .eq('id', pointEvent.id);
+        }
+
+        // 3. 刪除 Storage 中的圖片
+        if (existing.file_url) {
+            try {
+                const filePath = existing.file_url.split('/training-photos/')[1];
+                if (filePath) {
+                    await supabase.storage.from('training-photos').remove([decodeURIComponent(filePath)]);
+                }
+            } catch (e) {
+                console.warn('刪除圖片失敗:', e.message);
+            }
+        }
+
+        // 4. 刪除訓練紀錄
+        const { error } = await supabase
+            .from('training_records')
+            .delete()
+            .eq('id', params.id)
+            .eq('user_id', user.id);
+
+        if (error) {
+            return { success: false, message: error.message };
+        }
+
+        return { success: true, pointsDeducted: pointEvent?.points_change || 0 };
+    } catch (error) {
+        console.error("Error deleting training record:", error);
         return { success: false, message: error.message };
     }
 };
@@ -1138,16 +1334,24 @@ export const adminUpdateUserRole = async (userId, newRole) => {
  * 透過 RPC 取得所有用戶及其角色
  */
 export const adminListUsers = async () => {
+    const cacheKey = 'admin_users_cache';
     try {
         const result = await withTimeout(
             supabase.rpc('admin_list_users_with_roles'),
-            15000, // RPC 需要較長時間（查詢 auth.users + join roles）
+            12000, // 12s — Supabase 冷啟動需要較長時間
             null
         );
 
         if (!result || result.error) {
-            console.warn('adminListUsers timeout or error');
-            return { success: true, data: { users: [] } }; // 返回空但成功，避免阻塞 UI
+            console.warn('adminListUsers timeout or error, trying cache');
+            // 嘗試 localStorage 快取
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                try {
+                    return JSON.parse(cached);
+                } catch (e) { /* ignore parse error */ }
+            }
+            return { success: true, data: { users: [] } };
         }
 
         // 轉換為前端期望的格式
@@ -1159,10 +1363,17 @@ export const adminListUsers = async () => {
             created_at: u.created_at
         }));
 
-        return { success: true, data: { users } };
+        const response = { success: true, data: { users } };
+        // 快取到 localStorage
+        try { localStorage.setItem(cacheKey, JSON.stringify(response)); } catch (e) { /* quota exceeded */ }
+        return response;
     } catch (error) {
         console.error('Admin list users failed:', error);
-        return { success: true, data: { users: [] } }; // 返回空但成功，避免阻塞 UI
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            try { return JSON.parse(cached); } catch (e) { /* ignore */ }
+        }
+        return { success: true, data: { users: [] } };
     }
 };
 
@@ -1317,7 +1528,7 @@ export const fetchSeatingArrangements = async (dates) => {
  */
 export const submitBugReport = async ({ description, screenshotFile }) => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return { success: false, message: '請先登入' };
 
         // 1. 上傳截圖 (如果有的話)
@@ -1537,7 +1748,7 @@ export const fetchAllNews = async () => {
  */
 export const createNews = async (newsData) => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
         const insertData = {
             title: newsData.title,
@@ -1643,7 +1854,7 @@ export const deleteNews = async (id) => {
  */
 export const fetchUserPoints = async () => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return { totalPoints: 0, currentYearPoints: 0 };
 
         const { data, error } = await supabase
@@ -1673,7 +1884,7 @@ export const fetchUserPoints = async () => {
  */
 export const fetchPointEvents = async () => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return [];
 
         const { data, error } = await supabase
@@ -1857,7 +2068,7 @@ export const fetchFitnessHistory = async (date = null) => {
  */
 export const addReward = async (params) => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return { success: false, message: '請先登入' };
 
         let imageUrl = null;
@@ -2041,7 +2252,7 @@ export const fetchRewards = async ({ includeArchived = false } = {}) => {
  */
 export const redeemReward = async (rewardId) => {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (!user) return { success: false, message: '請先登入' };
 
         // 取得商品資訊
