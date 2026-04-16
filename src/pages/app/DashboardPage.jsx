@@ -22,11 +22,13 @@ export default function DashboardPage() {
         const loadAll = async () => {
             setLoading(true);
             try {
-                // 平行載入所有資料 (取代兩個分開的 useEffect + 減少重複呼叫)
+                // 平行載入所有資料 — 出席紀錄僅撈當年度（減少資料量）
+                const currentYear = new Date().getFullYear();
+                const yearStart = `${currentYear}-01-01`;
                 const [activities, pointsResult, allAttendance] = await Promise.all([
                     fetchActivities(),          // 呼叫一次，同時用於近期活動 + 統計計算
                     fetchUserPoints(),           // M 點
-                    fetchAttendance(),           // 出席紀錄 (用於排名 + 連續出席)
+                    fetchAttendance({ startDate: yearStart }),  // 僅當年度出席紀錄
                 ]);
 
                 // === 近期活動 ===

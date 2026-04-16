@@ -25,70 +25,34 @@ export default function ProtectedRoute({
     const [sessionChecked, setSessionChecked] = useState(false);
     const [hasValidSession, setHasValidSession] = useState(null);
 
-    // 直接檢查 Supabase Session（避免 AuthContext 初始化太慢導致誤判）
+    // 快速 session 判斷 — 優先信任 AuthContext，僅在未初始化時才檢查 Supabase
     useEffect(() => {
         let isMounted = true;
-        let timeoutId;
 
-        const checkSession = async () => {
-            try {
-                // 設置超時保護
-                const timeoutPromise = new Promise((_, reject) => {
-                    timeoutId = setTimeout(() => {
-                        reject(new Error('Session check timeout'));
-                    }, 15000); // 15 秒超時
-                });
-
-                const sessionPromise = supabase.auth.getSession();
-
-                const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-                clearTimeout(timeoutId);
-
-                if (isMounted) {
-                    setHasValidSession(!!session);
-                    setSessionChecked(true);
-                    console.log('Session check 完成:', !!session);
-                }
-            } catch (err) {
-                console.warn('Session check 超時或失敗:', err.message);
-                clearTimeout(timeoutId);
-
-                if (isMounted) {
-                    // 檢查 localStorage 是否有 auth token 作為備援
-                    // Supabase 的 key 格式: sb-<project-ref>-auth-token
-                    const hasStoredToken = Object.keys(localStorage).some(key =>
-                        key.startsWith('sb-') && key.endsWith('-auth-token')
-                    );
-
-                    // 也檢查是否有 user_roles 快取（表示之前成功登入過）
-                    const hasRolesCache = Object.keys(localStorage).some(key =>
-                        key.startsWith('user_roles_')
-                    );
-
-                    // 如果 AuthContext 已經有 user 資料，視為已登入
-                    const hasUserFromContext = !!user;
-
-                    const shouldBeLoggedIn = hasStoredToken || hasRolesCache || hasUserFromContext;
-                    console.log('使用備援判斷:', { hasStoredToken, hasRolesCache, hasUserFromContext, shouldBeLoggedIn });
-                    setHasValidSession(shouldBeLoggedIn);
-                    setSessionChecked(true);
-                }
-            }
-        };
-
-        // 如果 AuthContext 已初始化，直接使用其結果
         if (initialized) {
+            // AuthContext 已完成初始化，直接信任
             setSessionChecked(true);
             setHasValidSession(isAuthenticated);
-        } else {
-            // 否則直接檢查 Supabase
-            checkSession();
+            return;
         }
 
-        return () => {
-            isMounted = false;
-            clearTimeout(timeoutId);
-        };
+        // AuthContext 尚未初始化 — 先用 localStorage 快速判斷，避免 getSession 延遲
+        const hasStoredToken = Object.keys(localStorage).some(key =>
+            key.startsWith('sb-') && key.endsWith('-auth-token')
+        );
+        const hasUserFromContext = !!user;
+
+        if (hasStoredToken || hasUserFromContext) {
+            // 有 token 或有 user，先放行（AuthContext 初始化完成後會再次觸發此 effect）
+            setHasValidSession(true);
+            setSessionChecked(true);
+        } else {
+            // 無任何登入跡象，直接判定未登入
+            setHasValidSession(false);
+            setSessionChecked(true);
+        }
+
+        return () => { isMounted = false; };
     }, [initialized, isAuthenticated, user]);
 
     // 判斷是否還在初始載入中

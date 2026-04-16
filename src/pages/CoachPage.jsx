@@ -421,20 +421,14 @@ const CoachPage = () => {
         }
       };
 
-      const [activitiesData, announcementsData, adminUsersData] = await Promise.all([
+      // Phase 1: 只載入最輕量的活動和公告（不等 adminListUsers — 它是最慢的 RPC）
+      const [activitiesData, announcementsData] = await Promise.all([
         safeFetch(fetchActivities(), []),
-        safeFetch(fetchAnnouncements(), []),
-        safeFetch(adminListUsers(), { success: false, data: { users: [] } })
+        safeFetch(fetchAnnouncements(), [])
       ]);
 
       setActivities(activitiesData);
       setAnnouncements(announcementsData);
-
-      let adminMembersList = [];
-      if (adminUsersData?.success && adminUsersData.data?.users) {
-        adminMembersList = adminUsersData.data.users;
-        setAdminMembers(adminMembersList);
-      }
 
       // Legacy Date Handling
       const practiceActivities = (activitiesData || []).filter(a => a.type === 'boat_practice');
@@ -448,26 +442,33 @@ const CoachPage = () => {
       // 初始日期設定
       if (mappedDates.length > 0) {
         setTargetDay(mappedDates[0].date.split('(')[0].replace(/\//g, '-'));
-        setSelectedSeatingDate(mappedDates[0].date); // Initialize seating date
+        setSelectedSeatingDate(mappedDates[0].date);
       } else {
         setTargetDay(new Date().toISOString().split('T')[0]);
       }
 
-      // 關閉主 Loading
+      // 關閉主 Loading — 活動和公告已載入，頁面可以先顯示
       setLoading(false);
 
-      // Phase 2: 背景延遲載入
+      // Phase 2: 背景載入較慢的資料（adminListUsers、出席、報名）
       setBackgroundLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const [attData, actRegsData] = await Promise.all([
-        safeFetch(fetchAttendance(), []),
+      const yearStart = `${new Date().getFullYear()}-01-01`;
+      const [adminUsersData, attData, actRegsData] = await Promise.all([
+        safeFetch(adminListUsers(), { success: false, data: { users: [] } }),
+        safeFetch(fetchAttendance({ startDate: yearStart }), []),
         safeFetch(fetchActivityRegistrations(), [])
       ]);
 
+      let adminMembersList = [];
+      if (adminUsersData?.success && adminUsersData.data?.users) {
+        adminMembersList = adminUsersData.data.users;
+        setAdminMembers(adminMembersList);
+      }
+
       setActivityRegistrations(actRegsData || []);
 
-      // 單獨輕量請求 members (可能失敗所以包 try-catch)
+      // 撈 members 表（輕量查詢）
       let membersData = null;
       try {
         const { data } = await import('../lib/supabase').then(m =>
@@ -490,16 +491,15 @@ const CoachPage = () => {
 
       setRawAttendanceHistory(attData || []);
 
-      // Build email-to-name lookup from already-fetched membersData (no extra query needed)
+      // Build email-to-name lookup
       const emailToMemberName = {};
       (membersData || []).forEach(m => {
         if (m.email && m.name) emailToMemberName[m.email.toLowerCase()] = m.name;
       });
 
-      // 構建報名名單 (需依賴 adminMembersList + members fallback)
+      // 構建報名名單
       const newRegsMapped = (actRegsData || []).map(r => {
         const userInfo = adminMembersList.find(u => u.id === r.user_id);
-        // If memberName is missing, try to resolve from members table by email
         const memberFallbackName = userInfo?.email ? emailToMemberName[userInfo.email.toLowerCase()] : null;
         const resolvedName = userInfo?.memberName || memberFallbackName || r.users?.name || r.name || 'Unknown';
 
