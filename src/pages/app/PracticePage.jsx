@@ -270,8 +270,8 @@ export default function PracticePage() {
         }
     }, [user, registrations]);
 
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             // 只載入核心活動資料
             const [acts, regs] = await Promise.all([
@@ -441,14 +441,14 @@ export default function PracticePage() {
                 }
             }
 
+            setLoading(false); // hide spinner before Swal
             await Swal.fire('報名成功!', '已成功報名選擇的活動', 'success');
             setSelectedActivities([]);
-            loadData();
+            loadData(true); // silent background reload
         } catch (error) {
             console.error('Submit error:', error);
+            setLoading(false); // hide spinner before Swal
             Swal.fire('報名失敗', '請稍後再試', 'error');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -473,13 +473,13 @@ export default function PracticePage() {
 
                 if (error) throw error;
 
+                setLoading(false); // hide spinner before Swal
                 Swal.fire('已取消', '', 'success');
-                loadData();
+                loadData(true); // silent background reload
             } catch (error) {
                 console.error('Cancel error:', error);
+                setLoading(false); // hide spinner before Swal
                 Swal.fire('取消失敗', '請稍後再試', 'error');
-            } finally {
-                setLoading(false);
             }
         }
     };
