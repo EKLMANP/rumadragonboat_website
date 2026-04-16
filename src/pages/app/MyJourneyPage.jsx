@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/AppLayout';
-import { MapPin, Calendar, Camera, Star, Clock, CheckCircle, XCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MapPin, Calendar, Camera, Star, Clock, CheckCircle, XCircle, AlertCircle, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { fetchActivityRegistrations, postData, fetchTrainingRecords, fetchUserPoints, fetchPointEvents, fetchRewards, redeemReward } from '../../api/supabaseApi';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../contexts/AuthContext';
@@ -46,6 +46,7 @@ export default function MyJourneyPage() {
     });
     const [selectedFile, setSelectedFile] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [editingRecord, setEditingRecord] = useState(null); // 正在編輯的紀錄
 
     // 分頁設定 (自主訓練)
     const [currentPage, setCurrentPage] = useState(1);
@@ -341,6 +342,120 @@ export default function MyJourneyPage() {
         } catch (error) {
             console.error(error);
             Swal.fire('失敗', '發生未知錯誤', 'error');
+        }
+    };
+
+    // 編輯紀錄 — 填充表單
+    const handleEditRecord = (record) => {
+        setEditingRecord(record);
+        setUploadForm({
+            date: record.date,
+            type: record.type,
+            customType: record.custom_type || '',
+            notes: record.notes || ''
+        });
+        setSelectedFile(null);
+        // 滾動到表單區域
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // 取消編輯
+    const handleCancelEdit = () => {
+        setEditingRecord(null);
+        setUploadForm({
+            date: new Date().toISOString().split('T')[0],
+            type: '划船訓練',
+            customType: '',
+            notes: ''
+        });
+        setSelectedFile(null);
+    };
+
+    // 更新紀錄
+    const handleUpdateRecord = async () => {
+        if (!editingRecord) return;
+        if (!uploadForm.date || !uploadForm.type) {
+            return Swal.fire(lang === 'zh' ? '提示' : 'Notice', lang === 'zh' ? '請填寫日期與訓練類型' : 'Please fill in date and training type', 'warning');
+        }
+
+        Swal.fire({
+            title: lang === 'zh' ? '更新中...' : 'Updating...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            let fileToUpload = selectedFile;
+            if (selectedFile) {
+                try {
+                    const compressedBlob = await compressImage(selectedFile, { maxWidth: 1280, quality: 0.7 });
+                    fileToUpload = new File([compressedBlob], selectedFile.name, { type: 'image/jpeg', lastModified: Date.now() });
+                } catch (err) {
+                    console.warn('圖片壓縮失敗', err);
+                }
+            }
+
+            const result = await postData('updateTrainingRecord', {
+                id: editingRecord.id,
+                ...uploadForm,
+                file: fileToUpload
+            });
+
+            if (result.success) {
+                Swal.fire(lang === 'zh' ? '成功' : 'Success', lang === 'zh' ? '紀錄已更新' : 'Record updated', 'success');
+                handleCancelEdit();
+                setRefreshKey(prev => prev + 1);
+            } else {
+                Swal.fire(lang === 'zh' ? '失敗' : 'Failed', result.message || (lang === 'zh' ? '更新失敗' : 'Update failed'), 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            Swal.fire(lang === 'zh' ? '失敗' : 'Failed', lang === 'zh' ? '發生未知錯誤' : 'An unknown error occurred', 'error');
+        }
+    };
+
+    // 刪除紀錄
+    const handleDeleteRecord = async (record) => {
+        const result = await Swal.fire({
+            title: lang === 'zh' ? '確定要刪除？' : 'Delete this record?',
+            html: lang === 'zh'
+                ? `<p>刪除「${record.type}（${record.date}）」的紀錄後，<br/><strong>對應的 M 點將自動扣除</strong>。</p>`
+                : `<p>Deleting "${record.type} (${record.date})" will <strong>automatically deduct the corresponding M points</strong>.</p>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+            cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
+        });
+
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: lang === 'zh' ? '刪除中...' : 'Deleting...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await postData('deleteTrainingRecord', { id: record.id });
+                if (res.success) {
+                    const deducted = res.pointsDeducted || 0;
+                    Swal.fire(
+                        lang === 'zh' ? '已刪除' : 'Deleted',
+                        deducted > 0
+                            ? (lang === 'zh' ? `紀錄已刪除，已扣除 ${deducted} M 點` : `Record deleted, ${deducted} M points deducted`)
+                            : (lang === 'zh' ? '紀錄已刪除' : 'Record deleted'),
+                        'success'
+                    );
+                    // 如果正在編輯此紀錄，取消編輯
+                    if (editingRecord?.id === record.id) handleCancelEdit();
+                    setRefreshKey(prev => prev + 1);
+                } else {
+                    Swal.fire(lang === 'zh' ? '失敗' : 'Failed', res.message || (lang === 'zh' ? '刪除失敗' : 'Delete failed'), 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                Swal.fire(lang === 'zh' ? '失敗' : 'Failed', lang === 'zh' ? '發生未知錯誤' : 'An unknown error occurred', 'error');
+            }
         }
     };
 
@@ -648,13 +763,28 @@ export default function MyJourneyPage() {
                                     onChange={(e) => setUploadForm({ ...uploadForm, notes: e.target.value })}
                                 />
                             </div>
-                            <button
-                                onClick={handleSubmitUpload}
-                                disabled={loading}
-                                className="w-full py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-700 transition disabled:opacity-50"
-                            >
-                                {loading ? (lang === 'zh' ? '送出中...' : 'Submitting...') : (lang === 'zh' ? '送出紀錄' : 'Submit Record')}
-                            </button>
+                            <div className="flex gap-3">
+                                {editingRecord && (
+                                    <button
+                                        onClick={handleCancelEdit}
+                                        className="flex-1 py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition"
+                                    >
+                                        {lang === 'zh' ? '取消編輯' : 'Cancel Edit'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={editingRecord ? handleUpdateRecord : handleSubmitUpload}
+                                    disabled={loading}
+                                    className={`flex-1 py-3 font-bold rounded-xl transition disabled:opacity-50 ${editingRecord ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-sky-600 text-white hover:bg-sky-700'}`}
+                                >
+                                    {loading
+                                        ? (lang === 'zh' ? '處理中...' : 'Processing...')
+                                        : editingRecord
+                                            ? (lang === 'zh' ? '更新紀錄' : 'Update Record')
+                                            : (lang === 'zh' ? '送出紀錄' : 'Submit Record')
+                                    }
+                                </button>
+                            </div>
 
                             {/* 我的上傳紀錄 */}
                             <div className="mt-8">
@@ -663,7 +793,7 @@ export default function MyJourneyPage() {
                                     <>
                                         <div className="space-y-3">
                                             {currentRecords.map((record) => (
-                                                <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                                <div key={record.id} className={`flex items-center justify-between p-4 rounded-xl ${editingRecord?.id === record.id ? 'bg-amber-50 ring-2 ring-amber-400' : 'bg-gray-50'}`}>
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                                                             {record.file_url ? (
@@ -677,9 +807,23 @@ export default function MyJourneyPage() {
                                                             <div className="text-sm text-gray-500">{record.date}</div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2">
                                                         {getStatusBadge(record.status)}
-                                                        {record.points > 0 && <span className="text-yellow-600 font-bold">+{record.points} M點</span>}
+                                                        {record.points > 0 && <span className="text-yellow-600 font-bold text-sm">+{record.points} M{lang === 'zh' ? '點' : 'pt'}</span>}
+                                                        <button
+                                                            onClick={() => handleEditRecord(record)}
+                                                            title={lang === 'zh' ? '編輯' : 'Edit'}
+                                                            className="p-1.5 text-sky-500 hover:bg-sky-100 rounded-lg transition"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteRecord(record)}
+                                                            title={lang === 'zh' ? '刪除' : 'Delete'}
+                                                            className="p-1.5 text-red-400 hover:bg-red-100 rounded-lg transition"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}

@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { clearUserCache } from '../api/supabaseApi';
 
 // 角色定義
 export const ROLES = {
@@ -279,21 +280,17 @@ export function AuthProvider({ children }) {
 
         initAuth();
 
-        // 監聽認證狀態變化
-        // 重要：Supabase 會依序觸發 INITIAL_SESSION -> SIGNED_IN / SIGNED_OUT
-        // 我們需要正確處理 INITIAL_SESSION 以避免重複載入或誤登出
+        // 監聯認證狀態變化
+        // 重要：Supabase 會依序觸發 INITIAL_SESSION -> SIGNED_IN (可能多次)
+        // 使用閉包變數 lastProcessedUserId 來防止重複處理（不依賴 React state）
         let lastProcessedUserId = null;
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                if (import.meta.env.DEV) console.log('Auth 狀態變化:', event, session?.user?.email);
-
                 if (!isMounted) return;
 
-                // INITIAL_SESSION 是頁面載入時 Supabase 發送的第一個事件
-                // 如果已經在 initAuth 中處理過，則跳過
+                // INITIAL_SESSION：已在 initAuth 中處理，跳過
                 if (event === 'INITIAL_SESSION') {
-                    if (import.meta.env.DEV) console.log('跳過 INITIAL_SESSION - 已在 initAuth 中處理');
                     if (session?.user) {
                         lastProcessedUserId = session.user.id;
                     }
@@ -301,19 +298,13 @@ export function AuthProvider({ children }) {
                 }
 
                 if (event === 'SIGNED_IN' && session?.user) {
-                    // 新登入時清除快取 (僅記憶體)，並重新查詢角色
-                    // 保留 localStorage 快取以供 fallback 使用
-                    roleCache.delete(session.user.id);
-                    // localStorage.removeItem(`user_roles_${session.user.id}`); // 移除此行，保留本地快取作為備援
-
-                    // 防止重複處理同一個用戶 (但不影響全新登入)
-                    if (lastProcessedUserId === session.user.id && user?.id === session.user.id) {
+                    // 核心修復：用閉包變數（非 React state）防止重複處理
+                    // 之前 user?.id 來自 React state 閉包，永遠是 null，導致每次 SIGNED_IN 都被處理
+                    if (lastProcessedUserId === session.user.id) {
                         if (import.meta.env.DEV) console.log('跳過重複 SIGNED_IN 事件');
                         return;
                     }
                     lastProcessedUserId = session.user.id;
-
-                    setLoading(true);
 
                     // 設置用戶
                     setUser(session.user);
@@ -326,22 +317,22 @@ export function AuthProvider({ children }) {
                     };
                     setUserProfile(quickProfile);
 
-                    // 獲取角色 - 強制查詢，不使用快取
+                    // 獲取角色（優先用 localStorage 快取，不阻塞 UI）
                     const roles = await fetchUserRoles(session.user.id, session.user.email);
-                    setUserRoles(roles);
-                    setLoading(false);
+                    if (isMounted) {
+                        setUserRoles(roles);
+                        setLoading(false);
+                    }
                     if (import.meta.env.DEV) console.log('登入後查詢角色:', roles);
                 } else if (event === 'SIGNED_OUT') {
-                    // 確認真的是登出，而不是誤發
-                    // 檢查是否有有效 session
+                    // 確認真的是登出
                     const { data: { session: currentSession } } = await supabase.auth.getSession();
                     if (currentSession?.user) {
-                        if (import.meta.env.DEV) console.log('忽略虛假 SIGNED_OUT - session 仍然有效');
                         return;
                     }
 
-                    if (import.meta.env.DEV) console.log('執行真正登出');
                     roleCache.clear();
+                    clearUserCache();
                     loadingRef.current = null;
                     lastProcessedUserId = null;
                     setUser(null);
@@ -350,10 +341,6 @@ export function AuthProvider({ children }) {
                     setLoading(false);
                 } else if (event === 'TOKEN_REFRESHED' && session?.user) {
                     setUser(session.user);
-                } else if (event === 'USER_UPDATED' && session?.user) {
-                    // 刷新角色
-                    const roles = await fetchUserRoles(session.user.id, session.user.email);
-                    setUserRoles(roles);
                 }
             }
         );
