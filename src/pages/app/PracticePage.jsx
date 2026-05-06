@@ -45,30 +45,32 @@ export default function PracticePage() {
     const [openDates, setOpenDates] = useState([]);
 
     // Seating Chart State
-    const [seatingDate, setSeatingDate] = useState('');
+    const [seatingActivityId, setSeatingActivityId] = useState('');
     const [seatingData, setSeatingData] = useState(null);
     const [seatingLoading, setSeatingLoading] = useState(false);
-    const [availableSeatingDates, setAvailableSeatingDates] = useState([]);
+    const [availableSeatingActivities, setAvailableSeatingActivities] = useState([]);
 
-    // Load seating data when date changes
+    // Currently selected seating activity (for chart title, date, etc.)
+    const selectedSeatingActivity = availableSeatingActivities.find(a => a.id === seatingActivityId) || null;
+
+    // Load seating data when activity changes
     useEffect(() => {
-        if (seatingDate) {
-            loadSeatingForDate(seatingDate);
+        if (seatingActivityId) {
+            loadSeatingForActivity(seatingActivityId);
         }
-    }, [seatingDate]);
+    }, [seatingActivityId]);
 
-    const loadSeatingForDate = async (date) => {
+    const loadSeatingForActivity = async (activityId) => {
         setSeatingLoading(true);
         try {
-            const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
-
-            // 1. Find the activity for this date
+            // 1. Fetch the activity by id (handles same-date AM/PM correctly)
             const { data: activity } = await supabase
                 .from('activities')
-                .select('id')
-                .eq('date', cleanDate)
-                .eq('type', 'boat_practice')
+                .select('id, date, name')
+                .eq('id', activityId)
                 .maybeSingle();
+
+            const cleanDate = activity?.date || '';
 
             let participants = [];
 
@@ -270,8 +272,8 @@ export default function PracticePage() {
         }
     }, [user, registrations]);
 
-    const loadData = async () => {
-        setLoading(true);
+    const loadData = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             // 只載入核心活動資料
             const [acts, regs] = await Promise.all([
@@ -345,18 +347,35 @@ export default function PracticePage() {
                         });
                     }
 
-                    // New activities system dates (boat_practice)
-                    const boatActivities = (acts || []).filter(a => a.type === 'boat_practice');
-                    const newSeatingDates = boatActivities
-                        .map(a => `${a.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(a.date).getDay()]})`)
-                        .sort(); // Sort dates
+                    // New activities system — build per-activity options so AM/PM
+                    // sessions on the same date are independently selectable.
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const boatActivities = (acts || [])
+                        .filter(a => a.type === 'boat_practice' && a.id && a.date)
+                        .slice()
+                        .sort((x, y) => {
+                            if (x.date !== y.date) return x.date < y.date ? -1 : 1;
+                            return (x.start_time || '').localeCompare(y.start_time || '');
+                        })
+                        .map(a => {
+                            const fallback = `${a.date.replace(/-/g, '/')}(${dayNames[new Date(a.date).getDay()]})${a.start_time ? ' ' + a.start_time.slice(0, 5) : ''}`;
+                            return {
+                                id: a.id,
+                                date: a.date,
+                                start_time: a.start_time || null,
+                                name: a.name || '',
+                                place: a.place || '',
+                                label: a.name || fallback,
+                            };
+                        });
 
-                    setAvailableSeatingDates(newSeatingDates);
+                    setAvailableSeatingActivities(boatActivities);
 
-                    // Set default date if available
-                    if (newSeatingDates.length > 0 && !seatingDate) {
-                        // Find closest upcoming date or just the first one
-                        setSeatingDate(newSeatingDates[0]);
+                    // Default select: first upcoming-or-today activity, else first
+                    if (boatActivities.length > 0 && !seatingActivityId) {
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const upcoming = boatActivities.find(a => a.date >= todayStr);
+                        setSeatingActivityId((upcoming || boatActivities[0]).id);
                     }
 
                 } catch (e) {
@@ -441,14 +460,14 @@ export default function PracticePage() {
                 }
             }
 
+            setLoading(false); // hide spinner before Swal
             await Swal.fire('報名成功!', '已成功報名選擇的活動', 'success');
             setSelectedActivities([]);
-            loadData();
+            loadData(true); // silent background reload
         } catch (error) {
             console.error('Submit error:', error);
+            setLoading(false); // hide spinner before Swal
             Swal.fire('報名失敗', '請稍後再試', 'error');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -473,13 +492,13 @@ export default function PracticePage() {
 
                 if (error) throw error;
 
+                setLoading(false); // hide spinner before Swal
                 Swal.fire('已取消', '', 'success');
-                loadData();
+                loadData(true); // silent background reload
             } catch (error) {
                 console.error('Cancel error:', error);
+                setLoading(false); // hide spinner before Swal
                 Swal.fire('取消失敗', '請稍後再試', 'error');
-            } finally {
-                setLoading(false);
             }
         }
     };
@@ -810,13 +829,13 @@ export default function PracticePage() {
                         {/* 日期選擇器 */}
                         <div className="relative">
                             <select
-                                value={seatingDate}
-                                onChange={(e) => setSeatingDate(e.target.value)}
+                                value={seatingActivityId}
+                                onChange={(e) => setSeatingActivityId(e.target.value)}
                                 className="appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full p-2.5 pr-8"
                             >
-                                {availableSeatingDates.length === 0 && <option value="">{lang === 'zh' ? '暫無船練' : 'No Practice'}</option>}
-                                {availableSeatingDates.map(date => (
-                                    <option key={date} value={date}>{date}</option>
+                                {availableSeatingActivities.length === 0 && <option value="">{lang === 'zh' ? '暫無船練' : 'No Practice'}</option>}
+                                {availableSeatingActivities.map(a => (
+                                    <option key={a.id} value={a.id}>{a.label}</option>
                                 ))}
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
@@ -833,7 +852,8 @@ export default function PracticePage() {
                     ) : (
                         <SeatVisualizer
                             boatData={seatingData}
-                            date={seatingDate}
+                            date={selectedSeatingActivity?.date ? `${selectedSeatingActivity.date.replace(/-/g, '/')}(${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(selectedSeatingActivity.date).getDay()]})` : ''}
+                            title={selectedSeatingActivity?.name || ''}
                             isEditable={false}
                         />
                     )}
