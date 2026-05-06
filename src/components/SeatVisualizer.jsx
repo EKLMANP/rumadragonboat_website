@@ -30,7 +30,7 @@ const Seat = ({ user, side, index, isSelected, isEditable, onClick }) => {
 };
 
 // --- 主元件 ---
-const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEditable = false, selectedSeat, onSelect }) => {
+const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, isEditable = false, selectedSeat, onSelect }) => {
   const boatRef = useRef(null);
 
   const displayPlace = location || place;
@@ -106,7 +106,7 @@ const SeatVisualizer = ({ boatData, date, location, place, time, onSwap, isEdita
         {/* 標題區 */}
         <div className="flex justify-between items-center w-full mb-6 border-b-2 border-sky-100 pb-4 z-10 flex-col md:flex-row gap-4">
           <div className="flex flex-col items-start w-full md:w-auto">
-            <h2 className="text-2xl font-extrabold text-sky-800 tracking-tight">{date} 訓練槳位</h2>
+            <h2 className="text-2xl font-extrabold text-sky-800 tracking-tight">{title || `${date} 訓練槳位`}</h2>
             {displayPlace && (
               <div className="flex items-center gap-1 text-sky-600 font-bold mt-1 text-sm bg-sky-50 px-2 py-1 rounded-md w-full md:w-auto">
                 <MapPin size={16} /> 地點 Place：{displayPlace}
