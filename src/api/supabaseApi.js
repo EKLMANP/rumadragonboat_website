@@ -1430,25 +1430,51 @@ export const adminDeleteUser = async (userId) => {
 /**
  * 儲存/更新槳位表 (Coach/Admin)
  * @param {string} date - 日期 (YYYY-MM-DD or Display Date)
+ * @param {string} activityId - 活動 UUID（優先）
  * @param {object} boatData - 座位資料 JSON
+ * @param {string} date - 顯示日期 fallback (YYYY/MM/DD(Day) or YYYY-MM-DD)
  */
-export const saveSeatingArrangement = async (date, boatData) => {
+export const saveSeatingArrangement = async (activityId, boatData, date) => {
     try {
-        // 標準化日期: 移除括號與星期，並將 / 轉為 -
-        // Input: "2026/01/18(Sun)" -> "2026-01-18"
-        const cleanDate = date.split('(')[0].replace(/\//g, '-').trim();
+        const cleanDate = date ? date.split('(')[0].replace(/\//g, '-').trim() : null;
 
-        console.log('Saving seating for:', cleanDate);
+        if (activityId) {
+            // New path: upsert keyed on activity_id (supports AM/PM on same date)
+            const { data: existing } = await supabase
+                .from('seating_arrangements')
+                .select('id')
+                .eq('activity_id', activityId)
+                .maybeSingle();
 
-        const { error } = await supabase
-            .from('seating_arrangements')
-            .upsert({
-                practice_date: cleanDate,
-                boat_data: boatData,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'practice_date' });
+            if (existing) {
+                const { error } = await supabase
+                    .from('seating_arrangements')
+                    .update({ boat_data: boatData, updated_at: new Date().toISOString() })
+                    .eq('activity_id', activityId);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('seating_arrangements')
+                    .insert({
+                        activity_id: activityId,
+                        practice_date: cleanDate,
+                        boat_data: boatData,
+                        updated_at: new Date().toISOString()
+                    });
+                if (error) throw error;
+            }
+        } else {
+            // Legacy path: upsert keyed on practice_date
+            const { error } = await supabase
+                .from('seating_arrangements')
+                .upsert({
+                    practice_date: cleanDate,
+                    boat_data: boatData,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'practice_date' });
+            if (error) throw error;
+        }
 
-        if (error) throw error;
         return { success: true };
     } catch (error) {
         console.error("Error saving seating chart:", error);

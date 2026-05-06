@@ -122,11 +122,11 @@ export default function PracticePage() {
                 }
             }
 
-            // 4. Try to fetch saved arrangement snapshot
+            // 4. Try to fetch saved arrangement snapshot (keyed by activity_id first)
             const { data: savedData } = await supabase
                 .from('seating_arrangements')
                 .select('boat_data')
-                .eq('practice_date', cleanDate)
+                .eq('activity_id', activityId)
                 .maybeSingle();
 
             if (savedData?.boat_data) {

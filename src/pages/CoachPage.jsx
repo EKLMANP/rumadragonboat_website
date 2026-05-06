@@ -435,7 +435,8 @@ const CoachPage = () => {
       const mappedDates = practiceActivities.map(a => ({
         date: formatDateWithDay(a.date),
         place: a.location,
-        time: a.start_time
+        time: a.start_time,
+        activityId: a.id,
       }));
       setDbDates(mappedDates);
 
@@ -817,9 +818,11 @@ const CoachPage = () => {
     let hasAnyRegistrations = false;
 
     dbDates.forEach(item => {
-      // Find activity for this date
-      const dateStr = item.date.split('(')[0].replace(/\//g, '-');
-      const activity = activities.find(a => a.date === dateStr && a.type === 'boat_practice');
+      // Use activityId directly to avoid AM/PM collision when same date has multiple sessions
+      const activityId = item.activityId;
+      const activity = activityId
+        ? activities.find(a => a.id === activityId)
+        : activities.find(a => a.date === item.date.split('(')[0].replace(/\//g, '-') && a.type === 'boat_practice');
       if (!activity) return;
 
       // Get registrations for this activity directly from activityRegistrations (has user_id)
@@ -854,7 +857,7 @@ const CoachPage = () => {
       newCharts[item.date] = boatData;
 
       // 🔥 Sync to DB Immediately
-      saveSeatingArrangement(item.date, boatData).catch(err => console.error('Auto-save failed:', err));
+      saveSeatingArrangement(item.activityId || null, boatData, item.date).catch(err => console.error('Auto-save failed:', err));
     });
 
     if (!hasAnyRegistrations) {
@@ -944,7 +947,8 @@ const CoachPage = () => {
     setSeatingCharts(newCharts);
 
     // 🔥 Sync to DB on Swap
-    saveSeatingArrangement(date, newCharts[date]).catch(err => console.error('Swap save failed:', err));
+    const swapActivityId = dbDates.find(d => d.date === date)?.activityId || null;
+    saveSeatingArrangement(swapActivityId, newCharts[date], date).catch(err => console.error('Swap save failed:', err));
   };
 
   // --- 點名邏輯 ---
