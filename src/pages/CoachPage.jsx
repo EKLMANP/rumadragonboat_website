@@ -1,5 +1,5 @@
 // src/pages/CoachPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 // Icons
@@ -443,9 +443,25 @@ const CoachPage = () => {
       // 初始日期設定
       if (mappedDates.length > 0) {
         setTargetDay(mappedDates[0].date.split('(')[0].replace(/\//g, '-'));
-        setSelectedSeatingDate(mappedDates[0].date);
       } else {
         setTargetDay(new Date().toISOString().split('T')[0]);
+      }
+
+      // Default seating selection: first upcoming-or-today boat_practice activity by id
+      const todayStr = new Date().toISOString().split('T')[0];
+      const upcomingPractice = practiceActivities
+        .slice()
+        .sort((x, y) => {
+          if (x.date !== y.date) return x.date < y.date ? -1 : 1;
+          return (x.start_time || '').localeCompare(y.start_time || '');
+        })
+        .find(a => a.date >= todayStr);
+      if (upcomingPractice) {
+        setSelectedSeatingDate(upcomingPractice.id);
+      } else if (practiceActivities.length > 0) {
+        // Fallback: most recent past activity
+        const sortedDesc = practiceActivities.slice().sort((x, y) => (x.date < y.date ? 1 : -1));
+        setSelectedSeatingDate(sortedDesc[0].id);
       }
 
       // 關閉主 Loading — 活動和公告已載入，頁面可以先顯示
@@ -569,6 +585,36 @@ const CoachPage = () => {
     const dayName = days[d.getDay()];
     return `${dateString.replace(/-/g, '/')}(${dayName})`;
   };
+
+  // Seating dropdown options — mirrors 活動報名「船練座位表」: upcoming boat_practice
+  // activities, sorted ascending, displayed by activity name. Keyed by activity ID so
+  // AM/PM sessions on the same date stay distinct (matches PracticePage behavior).
+  const seatingActivities = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const cutoff = yesterday.toISOString().split('T')[0];
+
+    return (activities || [])
+      .filter(a => a.type === 'boat_practice' && a.id && a.date && a.date >= cutoff)
+      .slice()
+      .sort((x, y) => {
+        if (x.date !== y.date) return x.date < y.date ? -1 : 1;
+        return (x.start_time || '').localeCompare(y.start_time || '');
+      })
+      .map(a => {
+        const formatted = formatDateWithDay(a.date);
+        const fallback = `${formatted}${a.start_time ? ' ' + a.start_time.slice(0, 5) : ''}`;
+        return {
+          id: a.id,
+          activityId: a.id,
+          date: formatted,
+          rawDate: a.date,
+          label: a.name || fallback,
+          place: a.location || '',
+          time: a.start_time || '',
+        };
+      });
+  }, [activities]);
 
   // --- 操作邏輯 (New Activity System) ---
   const handleCreateActivity = async () => {
@@ -817,12 +863,9 @@ const CoachPage = () => {
     const newCharts = {};
     let hasAnyRegistrations = false;
 
-    dbDates.forEach(item => {
-      // Use activityId directly to avoid AM/PM collision when same date has multiple sessions
-      const activityId = item.activityId;
-      const activity = activityId
-        ? activities.find(a => a.id === activityId)
-        : activities.find(a => a.date === item.date.split('(')[0].replace(/\//g, '-') && a.type === 'boat_practice');
+    seatingActivities.forEach(item => {
+      // Key by activity ID to avoid AM/PM collision when same date has multiple sessions
+      const activity = activities.find(a => a.id === item.activityId);
       if (!activity) return;
 
       // Get registrations for this activity directly from activityRegistrations (has user_id)
@@ -854,7 +897,7 @@ const CoachPage = () => {
       const { reserve: seatingReserve, ...boatPart } = seatingResult;
       let boatData = { ...boatPart, reserve: seatingReserve || [] };
       if (!boatData.drummer) boatData.drummer = null;
-      newCharts[item.date] = boatData;
+      newCharts[item.activityId] = boatData;
 
       // 🔥 Sync to DB Immediately
       saveSeatingArrangement(item.activityId || null, boatData, item.date).catch(err => console.error('Auto-save failed:', err));
@@ -896,9 +939,9 @@ const CoachPage = () => {
     }
   };
 
-  const handleSwapSeat = (date, pos1, pos2) => {
+  const handleSwapSeat = (activityIdKey, pos1, pos2) => {
     const newCharts = JSON.parse(JSON.stringify(seatingCharts));
-    const boat = newCharts[date];
+    const boat = newCharts[activityIdKey];
     if (!boat) return;
 
     const ensureArrayLength = (side, index) => {
@@ -947,8 +990,9 @@ const CoachPage = () => {
     setSeatingCharts(newCharts);
 
     // 🔥 Sync to DB on Swap
-    const swapActivityId = dbDates.find(d => d.date === date)?.activityId || null;
-    saveSeatingArrangement(swapActivityId, newCharts[date], date).catch(err => console.error('Swap save failed:', err));
+    const swapItem = seatingActivities.find(d => d.activityId === activityIdKey);
+    const swapDateStr = swapItem ? swapItem.date : null;
+    saveSeatingArrangement(activityIdKey || null, newCharts[activityIdKey], swapDateStr).catch(err => console.error('Swap save failed:', err));
   };
 
   // --- 點名邏輯 ---
@@ -2012,9 +2056,9 @@ const CoachPage = () => {
                           onChange={(e) => setSelectedSeatingDate(e.target.value)}
                           className="w-full md:w-auto appearance-none pl-4 pr-10 py-2 bg-white border-2 border-gray-200 rounded-full text-base md:text-lg font-bold text-gray-600 shadow-sm focus:outline-none focus:border-gray-400 focus:ring-4 focus:ring-gray-100 transition cursor-pointer hover:border-gray-300 md:min-w-[200px]"
                         >
-                          {dbDates.length === 0 && <option value="" className="text-gray-900 bg-white">{lang === 'zh' ? '無活動' : 'No Activities'}</option>}
-                          {dbDates.map(d => (
-                            <option key={d.date} value={d.date} className="text-gray-900 bg-white">{d.date}</option>
+                          {seatingActivities.length === 0 && <option value="" className="text-gray-900 bg-white">{lang === 'zh' ? '無活動' : 'No Activities'}</option>}
+                          {seatingActivities.map(d => (
+                            <option key={d.id} value={d.id} className="text-gray-900 bg-white">{d.label}</option>
                           ))}
                         </select>
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
@@ -2045,26 +2089,27 @@ const CoachPage = () => {
                     </div>
                   ) : (
                     (() => {
-                      const date = selectedSeatingDate;
-                      const boatData = seatingCharts[date];
-                      const targetDateInfo = dbDates.find(d => d.date === date);
-                      const placeInfo = targetDateInfo ? targetDateInfo.place : '';
-                      const timeInfo = targetDateInfo ? targetDateInfo.time : '';
+                      const activityIdKey = selectedSeatingDate;
+                      const boatData = seatingCharts[activityIdKey];
+                      const targetInfo = seatingActivities.find(d => d.activityId === activityIdKey);
+                      const placeInfo = targetInfo ? targetInfo.place : '';
+                      const timeInfo = targetInfo ? targetInfo.time : '';
+                      const displayDate = targetInfo ? targetInfo.date : '';
 
                       return (
-                        <div key={date} className="flex flex-col xl:flex-row items-start justify-center gap-6 w-full max-w-7xl mx-auto px-1 md:px-4">
+                        <div key={activityIdKey} className="flex flex-col xl:flex-row items-start justify-center gap-6 w-full max-w-7xl mx-auto px-1 md:px-4">
                           {/* Boat Section */}
                           <div className="flex-1 w-full flex justify-center">
                             <SeatVisualizer
                               boatData={boatData}
-                              date={date}
+                              date={displayDate}
                               place={placeInfo}
                               time={timeInfo}
                               isEditable={true}
                               showStats={true}
                               selectedSeat={selectedSeatingCell}
                               onSelect={handleSeatSelect}
-                              onSwap={(pos1, pos2) => handleSwapSeat(date, pos1, pos2)}
+                              onSwap={(pos1, pos2) => handleSwapSeat(activityIdKey, pos1, pos2)}
                             />
                           </div>
 

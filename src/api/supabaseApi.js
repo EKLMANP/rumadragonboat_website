@@ -1439,28 +1439,37 @@ export const saveSeatingArrangement = async (activityId, boatData, date) => {
         const cleanDate = date ? date.split('(')[0].replace(/\//g, '-').trim() : null;
 
         if (activityId) {
-            // New path: upsert keyed on activity_id (supports AM/PM on same date)
+            // Try to find an existing row tagged with this activity_id.
+            // Note: the table has no `id` column (PK is practice_date), so we
+            // select an existing column instead.
             const { data: existing } = await supabase
                 .from('seating_arrangements')
-                .select('id')
+                .select('activity_id')
                 .eq('activity_id', activityId)
                 .maybeSingle();
 
             if (existing) {
                 const { error } = await supabase
                     .from('seating_arrangements')
-                    .update({ boat_data: boatData, updated_at: new Date().toISOString() })
+                    .update({
+                        boat_data: boatData,
+                        practice_date: cleanDate,
+                        updated_at: new Date().toISOString()
+                    })
                     .eq('activity_id', activityId);
                 if (error) throw error;
             } else {
+                // No row yet for this activity_id. Upsert on practice_date so
+                // that legacy rows (activity_id IS NULL) get adopted instead of
+                // colliding on the practice_date primary key.
                 const { error } = await supabase
                     .from('seating_arrangements')
-                    .insert({
+                    .upsert({
                         activity_id: activityId,
                         practice_date: cleanDate,
                         boat_data: boatData,
                         updated_at: new Date().toISOString()
-                    });
+                    }, { onConflict: 'practice_date' });
                 if (error) throw error;
             }
         } else {
