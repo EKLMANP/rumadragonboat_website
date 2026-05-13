@@ -28,7 +28,7 @@ export default function HomePage() {
     }, [location.hash]);
 
     // 影片檔案路徑
-    const heroVideoSrc = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/website-assets/hero-video.mp4`;
+    const heroVideoSrc = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/website%20assets/hero-video.mp4`;
     const heroImageFallback = '/banner.jpg';
 
     // RUMA 官方 Email
