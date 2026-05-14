@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter, ChevronDown } from 'lucide-react';
+import { Ship, Calendar, CheckCircle, Trash2, MapPin, Clock, Filter, ChevronDown, Users } from 'lucide-react';
 import { fetchAllData, postData, fetchActivities, fetchActivityRegistrations, fetchSeatingArrangements } from '../../api/supabaseApi';
 import { generateSeating } from '../../utils/seatingLogic';
 import SeatVisualizer from '../../components/SeatVisualizer';
 import AppLayout from '../../components/AppLayout';
+import RegistrantsModal from '../../components/RegistrantsModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -34,6 +35,7 @@ export default function PracticePage() {
     const [myRegistrations, setMyRegistrations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [activityPage, setActivityPage] = useState(1); // Add pagination state
+    const [registrantsModal, setRegistrantsModal] = useState({ open: false, activity: null });
 
     // 表單狀態
     const [selectedCategory, setSelectedCategory] = useState('all'); // Default to All
@@ -706,6 +708,19 @@ export default function PracticePage() {
                                                             )}
                                                         </div>
                                                     </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setRegistrantsModal({ open: true, activity });
+                                                        }}
+                                                        className="shrink-0 inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 hover:bg-sky-50 px-2 py-1 rounded-md transition"
+                                                        title={lang === 'zh' ? '查看報名名單' : 'View registrants'}
+                                                    >
+                                                        <Users size={14} />
+                                                        <span>{lang === 'zh' ? '查看名單' : 'View list'}</span>
+                                                    </button>
                                                 </label>
                                             );
                                         })}
@@ -797,13 +812,22 @@ export default function PracticePage() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleCancel(reg.id, reg.activities?.name)}
-                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition"
-                                                        title="取消報名"
-                                                    >
-                                                        <Trash2 size={20} />
-                                                    </button>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button
+                                                            onClick={() => setRegistrantsModal({ open: true, activity: reg.activities })}
+                                                            className="text-sky-500 hover:text-sky-700 hover:bg-sky-50 p-2 rounded-full transition"
+                                                            title={lang === 'zh' ? '查看報名名單' : 'View registrants'}
+                                                        >
+                                                            <Users size={20} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCancel(reg.id, reg.activities?.name)}
+                                                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition"
+                                                            title="取消報名"
+                                                        >
+                                                            <Trash2 size={20} />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -869,6 +893,12 @@ export default function PracticePage() {
                     </div>
                 </div>
             )}
+
+            <RegistrantsModal
+                isOpen={registrantsModal.open}
+                activity={registrantsModal.activity}
+                onClose={() => setRegistrantsModal({ open: false, activity: null })}
+            />
         </AppLayout>
     );
 }
