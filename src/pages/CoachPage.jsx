@@ -12,6 +12,7 @@ import {
 // API
 import { fetchAllData, postData, saveAttendance, fetchAttendance, fetchActivities, fetchActivityRegistrations, fetchAnnouncements, fetchDates, adminListUsers, saveSeatingArrangement, awardFitnessAttendance, fetchFitnessHistory, addReward, updateReward, archiveReward, restoreReward, fetchRewards, fetchRedemptionRecords, updateRedemptionStatus } from '../api/supabaseApi';
 import { generateSeating } from '../utils/seatingLogic';
+import { supabase } from '../lib/supabase';
 import SeatVisualizer from '../components/SeatVisualizer';
 import AppLayout from '../components/AppLayout';
 import NewsManager from '../components/NewsManager';
@@ -852,10 +853,40 @@ const CoachPage = () => {
       return;
     }
 
+    // Registrations/members loaded at page-mount can go stale if someone signs up
+    // after the coach opened this page — always pull the latest before generating,
+    // the same way the practice page's live seating fetch does.
+    Swal.fire({ title: '同步最新報名資料...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    const [freshRegs, freshAdminUsersRes, freshMembers] = await Promise.all([
+      fetchActivityRegistrations().catch(() => null),
+      adminListUsers().catch(() => null),
+      supabase.from('members').select('user_id, name, email, weight, position, skill_rating').order('name')
+        .then(({ data }) => data).catch(() => null)
+    ]);
+
+    const currentRegs = freshRegs || activityRegistrations;
+    setActivityRegistrations(currentRegs);
+
+    const currentAdminMembers = (freshAdminUsersRes?.success && freshAdminUsersRes.data?.users)
+      ? freshAdminUsersRes.data.users
+      : adminMembers;
+    if (currentAdminMembers !== adminMembers) setAdminMembers(currentAdminMembers);
+
+    const currentAllUsers = freshMembers
+      ? freshMembers.map(m => ({
+          UserId: m.user_id, Name: m.name, Email: m.email,
+          Weight: m.weight, Position: m.position, Skill_Rating: m.skill_rating
+        }))
+      : allUsers;
+    if (freshMembers) setAllUsers(currentAllUsers);
+
+    Swal.close();
+
     // Build lookup maps from allUsers (members table data — now includes UserId)
     const usersByUserId = {};
     const usersByEmail = {};
-    allUsers.forEach(u => {
+    currentAllUsers.forEach(u => {
       if (u.UserId) usersByUserId[u.UserId] = u;
       if (u.Email) usersByEmail[u.Email.toLowerCase()] = u;
     });
@@ -869,7 +900,7 @@ const CoachPage = () => {
       if (!activity) return;
 
       // Get registrations for this activity directly from activityRegistrations (has user_id)
-      const dateRegs = activityRegistrations.filter(r => r.activity_id === activity.id);
+      const dateRegs = currentRegs.filter(r => r.activity_id === activity.id);
       if (dateRegs.length === 0) return;
       hasAnyRegistrations = true;
 
@@ -878,13 +909,20 @@ const CoachPage = () => {
       dateRegs.forEach(r => {
         // Primary: match activity_registrations.user_id → members.user_id (direct, no RPC needed)
         let member = usersByUserId[r.user_id];
+        let adminUser = null;
 
         // Fallback: for members with NULL user_id, try email via adminMembers
-        if (!member && adminMembers.length > 0) {
-          const adminUser = adminMembers.find(u => u.id === r.user_id);
+        if (!member && currentAdminMembers.length > 0) {
+          adminUser = currentAdminMembers.find(u => u.id === r.user_id);
           if (adminUser?.email) {
             member = usersByEmail[adminUser.email.toLowerCase()];
           }
+        }
+
+        // Last resort: admin_list_users_with_roles already resolves member_name via its own
+        // server-side join — use it so a registered paddler is never silently dropped from the boat.
+        if (!member && adminUser?.memberName) {
+          member = { Name: adminUser.memberName, Weight: 0, Position: '左右', Skill_Rating: 1 };
         }
 
         if (member) {
