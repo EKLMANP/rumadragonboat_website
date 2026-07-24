@@ -284,37 +284,61 @@ export const fetchActivities = async (upcomingOnly = false) => {
  */
 export const fetchActivityRegistrations = async (userOnly = false, upcomingOnly = false) => {
     try {
-        let query = supabase
-            .from('activity_registrations')
-            .select(`
-                *,
-                activities!inner (name, date, type, location, start_time)
-            `);
-
         // 如果 userOnly 為 true，僅撈當前使用者的報名紀錄
+        let userId = null;
         if (userOnly) {
             const user = await getCachedUser();
             if (!user) return [];
-            query = query.eq('user_id', user.id);
+            userId = user.id;
         }
 
+        let cutoffDate = null;
         if (upcomingOnly) {
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
-            query = query.gte('activities.date', yesterday.toISOString().split('T')[0]);
+            cutoffDate = yesterday.toISOString().split('T')[0];
         }
 
-        const result = await withTimeout(
-            query,
-            10000,
-            { data: [], error: null }
-        );
+        // ⚠️ PostgREST 預設單次查詢最多回傳 1000 筆 (db-max-rows)。當報名總筆數超過
+        // 1000 時，未分頁的查詢會被靜默截斷 —— 導致部分已報名隊員在槳位/名單中消失。
+        // 這裡用 .range() 分頁循環，確保拿到完整資料。
+        const PAGE_SIZE = 1000;
+        let allRows = [];
+        let from = 0;
 
-        if (result?.error) {
-            console.error("Error fetching activity registrations:", result.error);
-            return [];
+        while (true) {
+            let query = supabase
+                .from('activity_registrations')
+                .select(`
+                    *,
+                    activities!inner (name, date, type, location, start_time)
+                `)
+                .order('id', { ascending: true }) // 穩定排序，確保分頁不重複/不遺漏
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (userId) query = query.eq('user_id', userId);
+            if (cutoffDate) query = query.gte('activities.date', cutoffDate);
+
+            const result = await withTimeout(
+                query,
+                10000,
+                { data: [], error: null }
+            );
+
+            if (result?.error) {
+                console.error("Error fetching activity registrations:", result.error);
+                break;
+            }
+
+            const rows = result?.data || [];
+            allRows = allRows.concat(rows);
+
+            // 最後一頁（不足 PAGE_SIZE）即停止
+            if (rows.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
         }
-        return result?.data || [];
+
+        return allRows;
     } catch (error) {
         console.error("Error fetching activity registrations:", error);
         return [];

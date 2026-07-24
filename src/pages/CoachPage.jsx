@@ -891,9 +891,6 @@ const CoachPage = () => {
       if (u.Email) usersByEmail[u.Email.toLowerCase()] = u;
     });
 
-    // TEMP DIAGNOSTIC — remove once the missing-paddler issue is confirmed fixed.
-    console.log(`[SeatGen] currentRegs total=${currentRegs.length}, currentAllUsers=${currentAllUsers.length}, currentAdminMembers=${currentAdminMembers.length}`);
-
     const newCharts = {};
     let hasAnyRegistrations = false;
 
@@ -907,23 +904,18 @@ const CoachPage = () => {
       if (dateRegs.length === 0) return;
       hasAnyRegistrations = true;
 
-      // TEMP DIAGNOSTIC — remove once the missing-paddler issue is confirmed fixed.
-      console.log(`[SeatGen] activity ${activity.name} (${activity.id}) dateRegs=${dateRegs.length}`, dateRegs.map(r => r.user_id));
-
       // Match each registration to a member — primary: user_id, fallback: email
       const participants = [];
       dateRegs.forEach(r => {
         // Primary: match activity_registrations.user_id → members.user_id (direct, no RPC needed)
         let member = usersByUserId[r.user_id];
         let adminUser = null;
-        let matchMethod = 'user_id';
 
         // Fallback: for members with NULL user_id, try email via adminMembers
         if (!member && currentAdminMembers.length > 0) {
           adminUser = currentAdminMembers.find(u => u.id === r.user_id);
           if (adminUser?.email) {
             member = usersByEmail[adminUser.email.toLowerCase()];
-            matchMethod = 'email';
           }
         }
 
@@ -931,14 +923,6 @@ const CoachPage = () => {
         // server-side join — use it so a registered paddler is never silently dropped from the boat.
         if (!member && adminUser?.memberName) {
           member = { Name: adminUser.memberName, Weight: 0, Position: '左右', Skill_Rating: 1 };
-          matchMethod = 'memberName-fallback';
-        }
-
-        // TEMP DIAGNOSTIC — remove once the missing-paddler issue is confirmed fixed.
-        if (member) {
-          console.log(`[SeatGen] MATCHED user_id=${r.user_id} -> ${member.Name} (via ${matchMethod})`);
-        } else {
-          console.warn(`[SeatGen] UNMATCHED user_id=${r.user_id} — no member found (adminUser=${JSON.stringify(adminUser)})`);
         }
 
         if (member) {
@@ -947,18 +931,11 @@ const CoachPage = () => {
         }
       });
 
-      // TEMP DIAGNOSTIC — remove once the missing-paddler issue is confirmed fixed.
-      console.log(`[SeatGen] participants passed to generateSeating: ${participants.length}`, participants.map(p => p.Name));
-
       const seatingResult = generateSeating(participants);
       const { reserve: seatingReserve, ...boatPart } = seatingResult;
       let boatData = { ...boatPart, reserve: seatingReserve || [] };
       if (!boatData.drummer) boatData.drummer = null;
       newCharts[item.activityId] = boatData;
-
-      // TEMP DIAGNOSTIC — remove once the missing-paddler issue is confirmed fixed.
-      const seatedNames = [...boatData.left, ...boatData.right, boatData.steer, boatData.drummer, ...(boatData.reserve || [])].filter(Boolean).map(p => p.Name);
-      console.log(`[SeatGen] final seated (incl. reserve): ${seatedNames.length}`, seatedNames);
 
       // 🔥 Sync to DB Immediately
       saveSeatingArrangement(item.activityId || null, boatData, item.date).catch(err => console.error('Auto-save failed:', err));
