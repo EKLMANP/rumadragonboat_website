@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { clearUserCache } from '../api/supabaseApi';
+import { clearUserCache, escapeLike } from '../api/supabaseApi';
 
 // 角色定義
 export const ROLES = {
@@ -119,7 +119,7 @@ export function AuthProvider({ children }) {
             const { data, error } = await supabase
                 .from('members')
                 .select('*')
-                .eq('email', email)
+                .ilike('email', escapeLike(email))
                 .maybeSingle();
 
             if (error) {

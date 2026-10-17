@@ -27,6 +27,10 @@ const getCachedUser = async () => {
     return user;
 };
 
+// email 大小寫不一致（members 存 Yczazachen@…、auth 存 yczazachen@…）會讓 .eq('email') 查不到，
+// 查詢一律用 .ilike('email', escapeLike(email))；escapeLike 避免 email 內的 _ % 被當成萬用字元
+export const escapeLike = (value) => (value || '').replace(/[\\%_]/g, '\\$&');
+
 // 公開方法：清除快取（由 AuthContext 在登出時呼叫，不額外建立 listener）
 export const clearUserCache = () => {
     _cachedUser = null;
@@ -798,7 +802,7 @@ const addMember = async (params) => {
         .from('members')
         .insert({
             name: params.Name,
-            email: params.Email || null,
+            email: params.Email ? params.Email.trim().toLowerCase() : null,
             weight: params.Weight || null,
             position: params.Position,
             skill_rating: parseInt(params.Skill_Rating) || 1
@@ -817,7 +821,7 @@ const updateMember = async (params) => {
     const { error } = await supabase
         .from('members')
         .update({
-            email: params.Email || null,
+            email: params.Email ? params.Email.trim().toLowerCase() : null,
             weight: params.Weight,
             position: params.Position,
             skill_rating: parseInt(params.Skill_Rating) || 1,
@@ -1004,7 +1008,7 @@ const addTrainingRecord = async (params) => {
             const { data: member } = await supabase
                 .from('members')
                 .select('total_points')
-                .eq('email', user.email)
+                .ilike('email', escapeLike(user.email))
                 .maybeSingle();
 
             const currentPoints = member?.total_points || 0;
@@ -1014,7 +1018,7 @@ const addTrainingRecord = async (params) => {
             await supabase
                 .from('members')
                 .update({ total_points: newPoints })
-                .eq('email', user.email);
+                .ilike('email', escapeLike(user.email));
 
             // 寫入 point_events 歷史紀錄
             const trainingLabel = params.type === '其他' && params.customType
@@ -1161,7 +1165,7 @@ const deleteTrainingRecord = async (params) => {
             const { data: member } = await supabase
                 .from('members')
                 .select('total_points')
-                .eq('email', user.email)
+                .ilike('email', escapeLike(user.email))
                 .maybeSingle();
 
             const currentPoints = member?.total_points || 0;
@@ -1171,7 +1175,7 @@ const deleteTrainingRecord = async (params) => {
             await supabase
                 .from('members')
                 .update({ total_points: newPoints })
-                .eq('email', user.email);
+                .ilike('email', escapeLike(user.email));
 
             // 刪除 point_events 紀錄
             await supabase
@@ -1919,7 +1923,7 @@ export const fetchUserPoints = async () => {
         const { data, error } = await supabase
             .from('members')
             .select('total_points')
-            .eq('email', user.email)
+            .ilike('email', escapeLike(user.email))
             .maybeSingle();
 
         if (error) {
@@ -2041,7 +2045,7 @@ export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) 
                     const { data: userData } = await supabase
                         .from('users')
                         .select('id, total_points')
-                        .eq('email', member.email)
+                        .ilike('email', escapeLike(member.email))
                         .maybeSingle();
 
                     if (userData) {
@@ -2334,7 +2338,7 @@ export const redeemReward = async (rewardId) => {
         const { data: member } = await supabase
             .from('members')
             .select('total_points')
-            .eq('email', user.email)
+            .ilike('email', escapeLike(user.email))
             .maybeSingle();
 
         const currentPoints = member?.total_points || 0;
@@ -2368,7 +2372,7 @@ export const redeemReward = async (rewardId) => {
         await supabase
             .from('members')
             .update({ total_points: newPoints })
-            .eq('email', user.email);
+            .ilike('email', escapeLike(user.email));
 
         // 同步更新 users 表
         await supabase
