@@ -28,8 +28,8 @@ const getCachedUser = async () => {
 };
 
 // email 大小寫不一致（members 存 Yczazachen@…、auth 存 yczazachen@…）會讓 .eq('email') 查不到，
-// 查詢一律用 .ilike('email', escapeLike(email))；escapeLike 避免 email 內的 _ % 被當成萬用字元
-export const escapeLike = (value) => (value || '').replace(/[\\%_]/g, '\\$&');
+// 查詢一律用 .ilike('email', escapeLike(email))；escapeLike 避免 email 內的 _ % *（PostgREST 會把 * 轉成 %）被當成萬用字元
+export const escapeLike = (value) => (value || '').replace(/[\\%_*]/g, '\\$&');
 
 // 公開方法：清除快取（由 AuthContext 在登出時呼叫，不額外建立 listener）
 export const clearUserCache = () => {
