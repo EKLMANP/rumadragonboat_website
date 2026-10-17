@@ -1136,6 +1136,11 @@ const CoachPage = () => {
       // 這樣使用者切換到「出席報表」時，數據已經是新的了，不用等網路下載
       updateLocalHistoryOptimistically(rollCallDate, attendanceList);
 
+      // 6. 出席已存，但 M 點沒加成功 → 明確提醒（避免再次靜默失敗）
+      if (result.pointsError) {
+        Swal.fire('出席已儲存，但 M 點未加成功', result.pointsError, 'warning');
+      }
+
     } else {
       Swal.fire('失敗', '儲存點名失敗', 'error');
     }

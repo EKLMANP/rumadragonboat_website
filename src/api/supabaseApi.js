@@ -1223,7 +1223,7 @@ const deleteTrainingRecord = async (params) => {
  * 優化版：使用單一 RPC 呼叫 (save_attendance_batch) 取代串行 delete + insert
  * 網路往返次數：2 → 1，預計耗時：3-5s → < 500ms
  *
- * Stage 2 (background, fire-and-forget): award M-points using batched Promise.all
+ * Stage 2: award M-points via RPC award_attendance_points (error surfaced as pointsError)
  */
 export const saveAttendance = async (date, attendees) => {
     try {
@@ -1239,14 +1239,13 @@ export const saveAttendance = async (date, attendees) => {
             return { success: false, message: error.message };
         }
 
-        // === STAGE 2: Award M-points in background (fire-and-forget, never blocks UI) ===
+        // === STAGE 2: 加 M 點（單一 RPC，失敗時回報但不影響出席已儲存的事實）===
+        let pointsError = null;
         if (uniqueAttendees.length > 0) {
-            awardPointsForAttendance(date, uniqueAttendees).catch(err =>
-                console.warn('Background M-point awarding failed:', err)
-            );
+            pointsError = await awardPointsForAttendance(date, uniqueAttendees);
         }
 
-        return { success: true };
+        return pointsError ? { success: true, pointsError } : { success: true };
     } catch (error) {
         console.error("Error saving attendance:", error);
         return { success: false, message: error.message };
@@ -1254,79 +1253,26 @@ export const saveAttendance = async (date, attendees) => {
 };
 
 /**
- * Background M-point awarding — runs after attendance is saved, never blocks UI.
- * Uses batched parallel inserts (Promise.all) instead of sequential await loops.
+ * 出席加點：呼叫 SECURITY DEFINER RPC award_attendance_points。
+ * 教練身分直接 insert/update 別人的 point_events / members 會被 RLS 靜默擋下，
+ * 所以必須走 RPC（RPC 內檢查呼叫者為 management/admin、且同場次不重複加點）。
+ * @returns {Promise<string|null>} 失敗時回傳錯誤訊息，成功回傳 null
  */
 const awardPointsForAttendance = async (date, uniqueAttendees) => {
     try {
-        // (a) Fetch point rule + member data in parallel
-        const [ruleResult, membersResult] = await Promise.all([
-            supabase
-                .from('point_rules')
-                .select('id, base_points')
-                .eq('rule_code', 'PRACTICE_REGULAR')
-                .maybeSingle(),
-            supabase
-                .from('members')
-                .select('name, user_id, total_points')
-                .in('name', uniqueAttendees)
-        ]);
-
-        const rule = ruleResult.data;
-        const members = membersResult.data;
-
-        if (!members || members.length === 0) return;
-
-        const pointsToAward = rule?.base_points || 1;
-        const ruleId = rule?.id || null;
-
-        // Filter to only members with a user_id
-        const eligibleMembers = members.filter(m => m.user_id);
-        if (eligibleMembers.length === 0) return;
-
-        const userIds = eligibleMembers.map(m => m.user_id);
-
-        // (b) Check who already received points for this date — single batched query
-        const { data: existingEvents } = await supabase
-            .from('point_events')
-            .select('user_id')
-            .eq('source_type', 'practice')
-            .eq('source_id', date)
-            .in('user_id', userIds);
-
-        const existingUserIds = new Set((existingEvents || []).map(e => e.user_id));
-
-        // (c) Only award to members who haven't received points yet
-        const newRecipients = eligibleMembers.filter(m => !existingUserIds.has(m.user_id));
-        if (newRecipients.length === 0) return;
-
-        // (d) Batch all DB writes in parallel (Promise.all — not sequential)
-        await Promise.all(newRecipients.flatMap(member => {
-            const newTotal = (member.total_points || 0) + pointsToAward;
-            return [
-                supabase
-                    .from('members')
-                    .update({ total_points: newTotal })
-                    .eq('user_id', member.user_id),
-                supabase
-                    .from('point_events')
-                    .insert({
-                        user_id: member.user_id,
-                        event_type: 'earned',
-                        points_change: pointsToAward,
-                        balance_after: newTotal,
-                        source_type: 'practice',
-                        source_id: date,
-                        rule_id: ruleId,
-                        description: `出席練習 (${date})`
-                    })
-            ];
-        }));
-
-        console.log(`M-points awarded to ${newRecipients.length} members for ${date}`);
+        const { data, error } = await supabase.rpc('award_attendance_points', {
+            p_date: date,
+            p_names: uniqueAttendees
+        });
+        if (error) {
+            console.error('award_attendance_points error:', error);
+            return error.message;
+        }
+        console.log(`M-points awarded to ${data?.awarded ?? 0} members for ${date}`);
+        return null;
     } catch (err) {
-        // Background failure — log only, doesn't affect the user's confirmed attendance
         console.error('awardPointsForAttendance error:', err);
+        return err.message;
     }
 };
 
