@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import Swal from 'sweetalert2';
 
 export default function LoginPage() {
@@ -13,6 +14,8 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
 
     const { signIn, isAuthenticated } = useAuth();
+    const { lang } = useLanguage();
+    const isZh = lang === 'zh';
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -32,8 +35,8 @@ export default function LoginPage() {
         if (!email || !password) {
             Swal.fire({
                 icon: 'warning',
-                title: '請填寫完整',
-                text: '請輸入電子郵件和密碼',
+                title: isZh ? '請填寫完整' : 'Please fill in all fields',
+                text: isZh ? '請輸入電子郵件和密碼' : 'Please enter your email and password',
                 confirmButtonColor: '#0ea5e9'
             });
             return;
@@ -47,8 +50,8 @@ export default function LoginPage() {
             if (success) {
                 Swal.fire({
                     icon: 'success',
-                    title: '登入成功！',
-                    text: '歡迎回來 RUMA 🐉',
+                    title: isZh ? '登入成功！' : 'Login successful!',
+                    text: isZh ? '歡迎回來 RUMA 🐉' : 'Welcome back to RUMA 🐉',
                     timer: 1500,
                     showConfirmButton: false
                 }).then(() => {
@@ -57,16 +60,16 @@ export default function LoginPage() {
             } else {
                 Swal.fire({
                     icon: 'error',
-                    title: '登入失敗',
-                    text: error?.message || '電子郵件或密碼錯誤',
+                    title: isZh ? '登入失敗' : 'Login failed',
+                    text: error?.message || (isZh ? '電子郵件或密碼錯誤' : 'Incorrect email or password'),
                     confirmButtonColor: '#0ea5e9'
                 });
             }
         } catch (err) {
             Swal.fire({
                 icon: 'error',
-                title: '登入失敗',
-                text: '發生未知錯誤，請稍後再試',
+                title: isZh ? '登入失敗' : 'Login failed',
+                text: isZh ? '發生未知錯誤，請稍後再試' : 'An unknown error occurred. Please try again later.',
                 confirmButtonColor: '#0ea5e9'
             });
         } finally {
@@ -95,7 +98,7 @@ export default function LoginPage() {
                     <div className="bg-white rounded-3xl shadow-xl p-8">
                         {/* Title */}
                         <div className="text-center mb-6">
-                            <h1 className="text-2xl font-bold text-gray-800">隊友登入</h1>
+                            <h1 className="text-2xl font-bold text-gray-800">{isZh ? '隊友登入' : 'Teammate Login'}</h1>
                         </div>
 
                         {/* Login Form */}
@@ -105,7 +108,7 @@ export default function LoginPage() {
                                     htmlFor="email"
                                     className="block text-sm font-medium text-gray-700 mb-2"
                                 >
-                                    電子郵件
+                                    {isZh ? '電子郵件' : 'Email'}
                                 </label>
                                 <input
                                     id="email"
@@ -123,7 +126,7 @@ export default function LoginPage() {
                                     htmlFor="password"
                                     className="block text-sm font-medium text-gray-700 mb-2"
                                 >
-                                    密碼
+                                    {isZh ? '密碼' : 'Password'}
                                 </label>
                                 <div className="relative">
                                     <input
@@ -162,10 +165,10 @@ export default function LoginPage() {
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <span className="animate-spin">⏳</span>
-                                        登入中...
+                                        {isZh ? '登入中...' : 'Logging in...'}
                                     </span>
                                 ) : (
-                                    '登入'
+                                    isZh ? '登入' : 'Log In'
                                 )}
                             </button>
                         </form>
@@ -173,14 +176,14 @@ export default function LoginPage() {
                         {/* Divider */}
                         <div className="my-8 flex items-center">
                             <div className="flex-grow border-t border-gray-200"></div>
-                            <span className="px-4 text-gray-400 text-sm">或</span>
+                            <span className="px-4 text-gray-400 text-sm">{isZh ? '或' : 'or'}</span>
                             <div className="flex-grow border-t border-gray-200"></div>
                         </div>
 
                         {/* Info */}
                         <div className="text-center text-sm text-gray-500">
-                            <p>還沒有登入的帳號嗎？</p>
-                            <p className="mt-1">請聯繫 RUMA 幹部團隊為您建立登入帳號</p>
+                            <p>{isZh ? '還沒有登入的帳號嗎？' : "Don't have a login account yet?"}</p>
+                            <p className="mt-1">{isZh ? '請聯繫 RUMA 幹部團隊為您建立登入帳號' : 'Please contact the RUMA team leaders to create an account for you'}</p>
                         </div>
                     </div>
 
@@ -190,7 +193,7 @@ export default function LoginPage() {
                             to="/"
                             className="text-red-400 hover:text-red-300 font-medium"
                         >
-                            ← 返回首頁
+                            {isZh ? '← 返回首頁' : '← Back to Home'}
                         </Link>
                     </div>
                 </div>

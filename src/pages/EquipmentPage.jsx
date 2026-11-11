@@ -2,12 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Package, ClipboardList } from 'lucide-react';
 import { fetchAllData } from '../api/googleSheets';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const EquipmentPage = () => {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
   const [equipment, setEquipment] = useState([]);
   const [borrowRecords, setBorrowRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 翻譯裝備名稱（DB 值為中文，只在顯示處對照）
+  const getItemLabel = (name) => {
+    if (!name || lang === 'zh') return name;
+    if (name.includes('救生衣')) return 'Life Jacket';
+    if (name.includes('木槳')) return 'Wooden Paddle';
+    if (name.includes('碳纖')) return 'Carbon Paddle';
+    if (name.includes('帽')) return 'Cap';
+    return name;
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -41,10 +53,10 @@ const EquipmentPage = () => {
         {/* 黑色漸層遮罩 */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-6 md:p-10">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 drop-shadow-md">
-            公用裝備查詢 / Equipment
+            {lang === 'zh' ? '公用裝備查詢 / Equipment' : 'Equipment'}
           </h1>
           <p className="text-gray-200 text-sm md:text-base font-light drop-shadow">
-            裝備數量與借用紀錄 Equipment Status Inquiry
+            {lang === 'zh' ? '裝備數量與借用紀錄 Equipment Status Inquiry' : 'Equipment Status Inquiry'}
           </p>
         </div>
 
@@ -63,13 +75,13 @@ const EquipmentPage = () => {
         {/* 1. 上半部：裝備數量總覽 */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-            <Package className="text-blue-500" /> 裝備數量總覽 (Overview)
+            <Package className="text-blue-500" /> {lang === 'zh' ? '裝備數量總覽 (Overview)' : 'Overview'}
           </h2>
 
           {loading ? (
-            <div className="text-center py-8 text-gray-400">載入中...</div>
+            <div className="text-center py-8 text-gray-400">{lang === 'zh' ? '載入中...' : 'Loading...'}</div>
           ) : equipment.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">目前沒有裝備資料</div>
+            <div className="text-center py-8 text-gray-400">{lang === 'zh' ? '目前沒有裝備資料' : 'No equipment data'}</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {equipment.map((item, idx) => {
@@ -87,7 +99,7 @@ const EquipmentPage = () => {
                       <div className="w-24 h-24 rounded-full bg-white shadow-inner flex items-center justify-center mb-3 border-4 border-white overflow-hidden">
                         <img
                           src={imgUrl}
-                          alt={item.Item}
+                          alt={getItemLabel(item.Item)}
                           className="w-full h-full object-contain p-2 transform group-hover:scale-110 transition duration-500"
                         />
                       </div>
@@ -97,10 +109,10 @@ const EquipmentPage = () => {
                       </div>
                     )}
 
-                    <span className="text-gray-700 font-bold text-lg mb-1">{item.Item}</span>
+                    <span className="text-gray-700 font-bold text-lg mb-1">{getItemLabel(item.Item)}</span>
                     <div className="flex items-baseline gap-1">
                       <span className="text-4xl font-extrabold text-blue-600">{item.Count}</span>
-                      <span className="text-xs text-gray-500">庫存</span>
+                      <span className="text-xs text-gray-500">{lang === 'zh' ? '庫存' : 'In stock'}</span>
                     </div>
                   </div>
                 );
@@ -112,34 +124,34 @@ const EquipmentPage = () => {
         {/* 2. 下半部：借用紀錄 */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3">
-            <ClipboardList className="text-green-500" /> 借用紀錄 (Records)
+            <ClipboardList className="text-green-500" /> {lang === 'zh' ? '借用紀錄 (Records)' : 'Records'}
           </h2>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px]">
               <thead>
                 <tr className="bg-gray-100 text-gray-600 text-sm text-left">
-                  <th className="p-3 rounded-l-lg">姓名</th>
-                  <th className="p-3">借用日期</th>
-                  <th className="p-3">品項</th>
-                  <th className="p-3 rounded-r-lg">數量</th>
+                  <th className="p-3 rounded-l-lg">{lang === 'zh' ? '姓名' : 'Name'}</th>
+                  <th className="p-3">{lang === 'zh' ? '借用日期' : 'Borrow Date'}</th>
+                  <th className="p-3">{lang === 'zh' ? '品項' : 'Item'}</th>
+                  <th className="p-3 rounded-r-lg">{lang === 'zh' ? '數量' : 'Qty'}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="4" className="p-6 text-center text-gray-400">載入中...</td></tr>
+                  <tr><td colSpan="4" className="p-6 text-center text-gray-400">{lang === 'zh' ? '載入中...' : 'Loading...'}</td></tr>
                 ) : borrowRecords.length === 0 ? (
-                  <tr><td colSpan="4" className="p-6 text-center text-gray-400">目前無借用紀錄</td></tr>
+                  <tr><td colSpan="4" className="p-6 text-center text-gray-400">{lang === 'zh' ? '目前無借用紀錄' : 'No borrow records'}</td></tr>
                 ) : (
                   borrowRecords.map((record, idx) => (
                     <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="p-3 font-bold text-gray-800">{record.Name}</td>
                       <td className="p-3 text-gray-600">
                         {/* 防止日期格式錯誤導致白畫面 */}
-                        {record.Date ? new Date(record.Date).toLocaleDateString('zh-TW') : '-'}
+                        {record.Date ? new Date(record.Date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US') : '-'}
                       </td>
                       <td className="p-3 text-gray-600">
-                        <span className="bg-gray-100 px-2 py-1 rounded text-xs">{record.Item}</span>
+                        <span className="bg-gray-100 px-2 py-1 rounded text-xs">{getItemLabel(record.Item)}</span>
                       </td>
                       <td className="p-3 font-bold text-blue-600">{record.Count}</td>
                     </tr>

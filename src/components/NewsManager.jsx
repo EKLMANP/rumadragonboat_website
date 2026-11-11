@@ -26,6 +26,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { fetchAllNews, createNews, updateNews, deleteNews } from '../api/supabaseApi';
 import NewsContentRenderer from './NewsContentRenderer';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // 分類選項 (with i18n support)
 const CATEGORY_OPTIONS = [
@@ -36,10 +37,20 @@ const CATEGORY_OPTIONS = [
     { value: '其他', label: '其他', labelEn: 'Others' }
 ];
 
+// 分類顯示文字（DB 值維持中文，只在顯示處對照英文）
+const getCategoryLabel = (category, lang) => {
+    if (lang === 'zh') return category;
+    if (category === '隊伍活動') return 'Team Activity';
+    const opt = CATEGORY_OPTIONS.find(o => o.value === category);
+    return opt ? opt.labelEn : category;
+};
+
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // List Item Component
 function SortableListItem({ item, index, updateListItem, removeListItem, activeLang }) {
+    const { lang } = useLanguage();
+    const isZh = lang === 'zh' && activeLang === 'zh';
     // Ensure item is object, handle string legacy
     const itemId = typeof item === 'string' ? index : item.id;
     const itemText = typeof item === 'string' ? item : item.text;
@@ -70,12 +81,12 @@ function SortableListItem({ item, index, updateListItem, removeListItem, activeL
                 value={itemText}
                 onChange={(e) => updateListItem(index, e.target.value)}
                 className="flex-1 p-2 border rounded text-gray-900"
-                placeholder={activeLang === 'zh' ? "清單項目..." : "List item..."}
+                placeholder={isZh ? "清單項目..." : "List item..."}
             />
             <button
                 onClick={() => removeListItem(index)}
                 className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition opacity-0 group-hover:opacity-100"
-                title={activeLang === 'zh' ? "刪除項目" : "Remove item"}
+                title={isZh ? "刪除項目" : "Remove item"}
             >
                 <Trash2 size={16} />
             </button>
@@ -84,6 +95,8 @@ function SortableListItem({ item, index, updateListItem, removeListItem, activeL
 }
 
 function SortableBlock({ block, index, updateContentBlock, removeContentBlock, updateListItem, addListItem, removeListItem, reorderListItem, onInsertLink, activeLang }) {
+    const { lang } = useLanguage();
+    const isZh = lang === 'zh' && activeLang === 'zh';
     const {
         attributes,
         listeners,
@@ -150,7 +163,7 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             onChange={(e) => updateContentBlock(index, 'text', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
                             rows={3}
-                            placeholder={activeLang === 'zh' ? "輸入段落文字..." : "Enter paragraph text..."}
+                            placeholder={isZh ? "輸入段落文字..." : "Enter paragraph text..."}
                         />
                         <button
                             onClick={() => onInsertLink && onInsertLink(index)}
@@ -158,10 +171,10 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             type="button"
                         >
                             <ExternalLink size={12} />
-                            {activeLang === 'zh' ? '插入連結' : 'Insert Link'}
+                            {isZh ? '插入連結' : 'Insert Link'}
                         </button>
                         {block.text && block.text.includes('[') && block.text.includes('](') && (
-                            <p className="text-xs text-gray-400">{activeLang === 'zh' ? '包含 Markdown 連結，發布後將轉為可點擊連結' : 'Contains Markdown links, will become clickable after publishing'}</p>
+                            <p className="text-xs text-gray-400">{isZh ? '包含 Markdown 連結，發布後將轉為可點擊連結' : 'Contains Markdown links, will become clickable after publishing'}</p>
                         )}
                     </div>
                 )}
@@ -173,15 +186,15 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             onChange={(e) => updateContentBlock(index, 'level', e.target.value)}
                             className="p-2 border rounded text-gray-900 bg-white"
                         >
-                            <option value="h2">H2 主標題</option>
-                            <option value="h3">H3 副標題</option>
+                            <option value="h2">{isZh ? 'H2 主標題' : 'H2 Heading'}</option>
+                            <option value="h3">{isZh ? 'H3 副標題' : 'H3 Subheading'}</option>
                         </select>
                         <input
                             type="text"
                             value={block.text}
                             onChange={(e) => updateContentBlock(index, 'text', e.target.value)}
                             className="flex-1 p-2 border rounded text-gray-900 font-bold text-lg"
-                            placeholder={activeLang === 'zh' ? "輸入標題..." : "Enter heading..."}
+                            placeholder={isZh ? "輸入標題..." : "Enter heading..."}
                         />
                     </div>
                 )}
@@ -193,21 +206,21 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             value={block.url}
                             onChange={(e) => updateContentBlock(index, 'url', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
-                            placeholder={activeLang === 'zh' ? "圖片 URL..." : "Image URL..."}
+                            placeholder={isZh ? "圖片 URL..." : "Image URL..."}
                         />
                         <input
                             type="text"
                             value={block.alt || ''}
                             onChange={(e) => updateContentBlock(index, 'alt', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
-                            placeholder={activeLang === 'zh' ? "圖片替代文字 (Alt) * - SEO 必填" : "Alt text * - Required for SEO"}
+                            placeholder={isZh ? "圖片替代文字 (Alt) * - SEO 必填" : "Alt text * - Required for SEO"}
                         />
                         <input
                             type="text"
                             value={block.caption}
                             onChange={(e) => updateContentBlock(index, 'caption', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 text-sm"
-                            placeholder={activeLang === 'zh' ? "圖片說明（選填）" : "Caption (optional)"}
+                            placeholder={isZh ? "圖片說明（選填）" : "Caption (optional)"}
                         />
                     </div>
                 )}
@@ -219,14 +232,14 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             value={block.url}
                             onChange={(e) => updateContentBlock(index, 'url', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
-                            placeholder={activeLang === 'zh' ? "YouTube 或影片嵌入 URL..." : "YouTube or video embed URL..."}
+                            placeholder={isZh ? "YouTube 或影片嵌入 URL..." : "YouTube or video embed URL..."}
                         />
                         <input
                             type="text"
                             value={block.caption}
                             onChange={(e) => updateContentBlock(index, 'caption', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 text-sm"
-                            placeholder={activeLang === 'zh' ? "影片說明（選填）" : "Caption (optional)"}
+                            placeholder={isZh ? "影片說明（選填）" : "Caption (optional)"}
                         />
                     </div>
                 )}
@@ -238,14 +251,14 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             onChange={(e) => updateContentBlock(index, 'text', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 italic"
                             rows={2}
-                            placeholder={activeLang === 'zh' ? "引言內容..." : "Quote content..."}
+                            placeholder={isZh ? "引言內容..." : "Quote content..."}
                         />
                         <input
                             type="text"
                             value={block.author}
                             onChange={(e) => updateContentBlock(index, 'author', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 text-sm"
-                            placeholder={activeLang === 'zh' ? "引言者（選填）" : "Author (optional)"}
+                            placeholder={isZh ? "引言者（選填）" : "Author (optional)"}
                         />
                     </div>
                 )}
@@ -277,7 +290,7 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             onClick={() => addListItem(index)}
                             className="text-sm text-blue-500 hover:underline mt-2"
                         >
-                            {activeLang === 'zh' ? '+ 新增項目' : '+ Add Item'}
+                            {isZh ? '+ 新增項目' : '+ Add Item'}
                         </button>
                     </div>
                 )}
@@ -289,14 +302,14 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             value={block.url}
                             onChange={(e) => updateContentBlock(index, 'url', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
-                            placeholder={activeLang === 'zh' ? "連結 URL..." : "Link URL..."}
+                            placeholder={isZh ? "連結 URL..." : "Link URL..."}
                         />
                         <input
                             type="text"
                             value={block.text}
                             onChange={(e) => updateContentBlock(index, 'text', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 text-sm"
-                            placeholder={activeLang === 'zh' ? "顯示文字（選填）" : "Display text (optional)"}
+                            placeholder={isZh ? "顯示文字（選填）" : "Display text (optional)"}
                         />
                     </div>
                 )}
@@ -308,17 +321,17 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
                             value={block.summary}
                             onChange={(e) => updateContentBlock(index, 'summary', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900 font-bold"
-                            placeholder={activeLang === 'zh' ? "摘要標題 (點擊展開)..." : "Summary (Click to expand)..."}
+                            placeholder={isZh ? "摘要標題 (點擊展開)..." : "Summary (Click to expand)..."}
                         />
                         <textarea
                             value={block.content}
                             onChange={(e) => updateContentBlock(index, 'content', e.target.value)}
                             className="w-full p-2 border rounded text-gray-900"
                             rows={4}
-                            placeholder={activeLang === 'zh' ? "隱藏的詳細內容..." : "Hidden content..."}
+                            placeholder={isZh ? "隱藏的詳細內容..." : "Hidden content..."}
                         />
                         <p className="text-xs text-gray-400">
-                            {activeLang === 'zh'
+                            {isZh
                                 ? '支援 **粗體** 與 [連結](url)'
                                 : 'Supports **bold** and [links](url)'}
                         </p>
@@ -330,6 +343,7 @@ function SortableBlock({ block, index, updateContentBlock, removeContentBlock, u
 }
 
 export default function NewsManager() {
+    const { lang } = useLanguage();
     const [newsList, setNewsList] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
@@ -350,6 +364,8 @@ export default function NewsManager() {
     });
 
     const [activeLang, setActiveLang] = useState('zh'); // zh | en
+    // 編輯器介面文字：網站為英文時一律英文；中文時沿用編輯中的內容語系
+    const isZh = lang === 'zh' && activeLang === 'zh';
     const [editMode, setEditMode] = useState('visual'); // visual | paste | upload
     const [importText, setImportText] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -402,8 +418,8 @@ export default function NewsManager() {
                  <h1 class="text-4xl font-bold mb-4">${activeLang === 'zh' ? formData.title : (formData.title_en || formData.title)}</h1>
                  
                  <div class="flex items-center gap-3 mb-6">
-                    <span class="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded">${formData.category}</span>
-                    <span class="text-gray-400 text-sm">${new Date().toLocaleDateString('zh-TW')}</span>
+                    <span class="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded">${getCategoryLabel(formData.category, activeLang)}</span>
+                    <span class="text-gray-400 text-sm">${new Date().toLocaleDateString(activeLang === 'zh' ? 'zh-TW' : 'en-US')}</span>
                  </div>
 
                  ${(activeLang === 'zh' ? formData.excerpt : formData.excerpt_en) ? `
@@ -621,7 +637,7 @@ export default function NewsManager() {
     // 匯入 Markdown/HTML
     const handleImport = () => {
         if (!importText.trim()) {
-            Swal.fire('請貼上內容', '', 'warning');
+            Swal.fire(lang === 'zh' ? '請貼上內容' : 'Please paste some content', '', 'warning');
             return;
         }
         const blocks = parseMarkdownToBlocks(importText);
@@ -634,7 +650,7 @@ export default function NewsManager() {
         setEditMode('visual'); // 匯入後切換回視覺化模式
         Swal.fire({
             icon: 'success',
-            title: `已匯入 ${blocks.length} 個區塊`,
+            title: lang === 'zh' ? `已匯入 ${blocks.length} 個區塊` : `Imported ${blocks.length} ${blocks.length === 1 ? 'block' : 'blocks'}`,
             timer: 1500,
             showConfirmButton: false
         });
@@ -657,7 +673,7 @@ export default function NewsManager() {
             setEditMode('visual');
             Swal.fire({
                 icon: 'success',
-                title: `已匯入檔案內容 (${blocks.length} 個區塊)`,
+                title: lang === 'zh' ? `已匯入檔案內容 (${blocks.length} 個區塊)` : `File imported (${blocks.length} ${blocks.length === 1 ? 'block' : 'blocks'})`,
                 timer: 1500,
                 showConfirmButton: false
             });
@@ -770,14 +786,14 @@ export default function NewsManager() {
     // 插入連結到段落
     const insertLinkToParagraph = async (index) => {
         const { value: formValues } = await Swal.fire({
-            title: '插入連結',
+            title: lang === 'zh' ? '插入連結' : 'Insert Link',
             html:
-                '<input id="swal-link-text" class="swal2-input" placeholder="顯示文字">' +
-                '<input id="swal-link-url" class="swal2-input" placeholder="網址 (https://...)">',
+                `<input id="swal-link-text" class="swal2-input" placeholder="${lang === 'zh' ? '顯示文字' : 'Display text'}">` +
+                `<input id="swal-link-url" class="swal2-input" placeholder="${lang === 'zh' ? '網址 (https://...)' : 'URL (https://...)'}">`,
             focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: '插入',
-            cancelButtonText: '取消',
+            confirmButtonText: lang === 'zh' ? '插入' : 'Insert',
+            cancelButtonText: lang === 'zh' ? '取消' : 'Cancel',
             preConfirm: () => {
                 return {
                     text: document.getElementById('swal-link-text').value,
@@ -921,7 +937,7 @@ export default function NewsManager() {
     // 儲存（發布或草稿）
     const handleSave = async (publish = false) => {
         if (!formData.title.trim()) {
-            Swal.fire('請填寫標題', '', 'warning');
+            Swal.fire(lang === 'zh' ? '請填寫標題' : 'Please enter a title', '', 'warning');
             return;
         }
 
@@ -942,7 +958,7 @@ export default function NewsManager() {
         if (result.success) {
             Swal.fire({
                 icon: 'success',
-                title: publish ? '已發布' : '已儲存草稿',
+                title: publish ? (lang === 'zh' ? '已發布' : 'Published') : (lang === 'zh' ? '已儲存草稿' : 'Draft saved'),
                 timer: 1500,
                 showConfirmButton: false
             });
@@ -957,7 +973,7 @@ export default function NewsManager() {
             closeEditor();
             loadNews();
         } else {
-            Swal.fire('儲存失敗', result.message, 'error');
+            Swal.fire(lang === 'zh' ? '儲存失敗' : 'Failed to save', result.message, 'error');
         }
         setLoading(false);
     };
@@ -965,23 +981,23 @@ export default function NewsManager() {
     // 刪除
     const handleDelete = async (id, title) => {
         const result = await Swal.fire({
-            title: '刪除此消息?',
-            text: `確定要刪除「${title}」嗎？`,
+            title: lang === 'zh' ? '刪除此消息?' : 'Delete this news post?',
+            text: lang === 'zh' ? `確定要刪除「${title}」嗎？` : `Are you sure you want to delete "${title}"?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            confirmButtonText: '刪除',
-            cancelButtonText: '取消'
+            confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+            cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
         });
 
         if (result.isConfirmed) {
             setLoading(true);
             const res = await deleteNews(id);
             if (res.success) {
-                Swal.fire('已刪除', '', 'success');
+                Swal.fire(lang === 'zh' ? '已刪除' : 'Deleted', '', 'success');
                 loadNews();
             } else {
-                Swal.fire('刪除失敗', res.message, 'error');
+                Swal.fire(lang === 'zh' ? '刪除失敗' : 'Failed to delete', res.message, 'error');
             }
             setLoading(false);
         }
@@ -1003,7 +1019,7 @@ export default function NewsManager() {
     // 格式化日期
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleDateString('zh-TW');
+        return new Date(dateStr).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US');
     };
 
     const sensors = useSensors(
@@ -1035,14 +1051,14 @@ export default function NewsManager() {
             {/* 標題與新增按鈕 */}
             <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-700 flex items-center gap-2">
-                    📰 最新消息管理
+                    📰 {lang === 'zh' ? '最新消息管理' : 'News Management'}
                 </h3>
                 <button
                     onClick={() => openEditor()}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold"
                 >
                     <Plus size={18} />
-                    建立新消息
+                    {lang === 'zh' ? '建立新消息' : 'Create News'}
                 </button>
             </div>
 
@@ -1054,17 +1070,17 @@ export default function NewsManager() {
                     </div>
                 ) : newsList.length === 0 ? (
                     <div className="p-10 text-center text-gray-400">
-                        目前沒有任何最新消息
+                        {lang === 'zh' ? '目前沒有任何最新消息' : 'No news yet'}
                     </div>
                 ) : (
                     <table className="w-full">
                         <thead className="bg-gray-50">
                             <tr className="text-left text-sm text-gray-600">
-                                <th className="p-4">標題</th>
-                                <th className="p-4 hidden md:table-cell">分類</th>
-                                <th className="p-4 hidden md:table-cell">狀態</th>
-                                <th className="p-4 hidden lg:table-cell">建立日期</th>
-                                <th className="p-4 text-right">操作</th>
+                                <th className="p-4">{lang === 'zh' ? '標題' : 'Title'}</th>
+                                <th className="p-4 hidden md:table-cell">{lang === 'zh' ? '分類' : 'Category'}</th>
+                                <th className="p-4 hidden md:table-cell">{lang === 'zh' ? '狀態' : 'Status'}</th>
+                                <th className="p-4 hidden lg:table-cell">{lang === 'zh' ? '建立日期' : 'Created'}</th>
+                                <th className="p-4 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1078,7 +1094,7 @@ export default function NewsManager() {
                                     </td>
                                     <td className="p-4 hidden md:table-cell">
                                         <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                            {news.category}
+                                            {getCategoryLabel(news.category, lang)}
                                         </span>
                                     </td>
                                     <td className="p-4 hidden md:table-cell">
@@ -1086,7 +1102,7 @@ export default function NewsManager() {
                                             ? 'bg-green-100 text-green-700'
                                             : 'bg-yellow-100 text-yellow-700'
                                             }`}>
-                                            {news.is_published ? '已發布' : '草稿'}
+                                            {news.is_published ? (lang === 'zh' ? '已發布' : 'Published') : (lang === 'zh' ? '草稿' : 'Draft')}
                                         </span>
                                     </td>
                                     <td className="p-4 hidden lg:table-cell text-gray-500 text-sm">
@@ -1097,21 +1113,21 @@ export default function NewsManager() {
                                             <button
                                                 onClick={() => togglePublish(news)}
                                                 className="p-2 hover:bg-gray-100 rounded-lg transition"
-                                                title={news.is_published ? '取消發布' : '發布'}
+                                                title={news.is_published ? (lang === 'zh' ? '取消發布' : 'Unpublish') : (lang === 'zh' ? '發布' : 'Publish')}
                                             >
                                                 {news.is_published ? <EyeOff size={16} className="text-gray-400" /> : <Eye size={16} className="text-green-500" />}
                                             </button>
                                             <button
                                                 onClick={() => openEditor(news)}
                                                 className="p-2 hover:bg-gray-100 rounded-lg transition"
-                                                title="編輯"
+                                                title={lang === 'zh' ? '編輯' : 'Edit'}
                                             >
                                                 <Edit3 size={16} className="text-blue-500" />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(news.id, news.title)}
                                                 className="p-2 hover:bg-red-50 rounded-lg transition"
-                                                title="刪除"
+                                                title={lang === 'zh' ? '刪除' : 'Delete'}
                                             >
                                                 <Trash2 size={16} className="text-red-500" />
                                             </button>
@@ -1133,8 +1149,8 @@ export default function NewsManager() {
                         <div className="flex items-center justify-between p-6 border-b">
                             <h3 className="text-xl font-bold text-gray-800">
                                 {editingNews
-                                    ? (activeLang === 'zh' ? '編輯消息' : 'Edit News')
-                                    : (activeLang === 'zh' ? '建立新消息' : 'Create News')
+                                    ? (isZh ? '編輯消息' : 'Edit News')
+                                    : (isZh ? '建立新消息' : 'Create News')
                                 }
                             </h3>
 
@@ -1143,10 +1159,10 @@ export default function NewsManager() {
                                 <button
                                     onClick={() => handlePreviewNewWindow()}
                                     className="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition flex items-center gap-2 text-sm"
-                                    title={activeLang === 'zh' ? '在新視窗預覽' : 'Preview in new window'}
+                                    title={isZh ? '在新視窗預覽' : 'Preview in new window'}
                                 >
                                     <ExternalLink size={16} />
-                                    <span className="hidden md:inline">{activeLang === 'zh' ? '預覽' : 'Preview'}</span>
+                                    <span className="hidden md:inline">{isZh ? '預覽' : 'Preview'}</span>
                                 </button>
                                 <button
                                     onClick={() => handleSave(false)}
@@ -1154,7 +1170,7 @@ export default function NewsManager() {
                                     className="px-3 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition flex items-center gap-2 text-sm"
                                 >
                                     <Save size={16} />
-                                    <span className="hidden md:inline">{activeLang === 'zh' ? '存草稿' : 'Draft'}</span>
+                                    <span className="hidden md:inline">{isZh ? '存草稿' : 'Draft'}</span>
                                 </button>
                                 <button
                                     onClick={() => handleSave(true)}
@@ -1162,7 +1178,7 @@ export default function NewsManager() {
                                     className="px-3 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition flex items-center gap-2 text-sm"
                                 >
                                     {loading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
-                                    <span className="hidden md:inline">{activeLang === 'zh' ? '發布' : 'Publish'}</span>
+                                    <span className="hidden md:inline">{isZh ? '發布' : 'Publish'}</span>
                                 </button>
                             </div>
 
@@ -1170,7 +1186,7 @@ export default function NewsManager() {
                                 <button
                                     onClick={() => setIsFullscreen(!isFullscreen)}
                                     className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-800"
-                                    title={isFullscreen ? (activeLang === 'zh' ? '縮小' : 'Minimize') : (activeLang === 'zh' ? '全螢幕' : 'Fullscreen')}
+                                    title={isFullscreen ? (isZh ? '縮小' : 'Minimize') : (isZh ? '全螢幕' : 'Fullscreen')}
                                 >
                                     {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
                                 </button>
@@ -1187,7 +1203,7 @@ export default function NewsManager() {
                                 className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 ${activeLang === 'zh' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                                     }`}
                             >
-                                繁體中文
+                                {lang === 'zh' ? '繁體中文' : 'Traditional Chinese'}
                             </button>
                             <button
                                 onClick={() => setActiveLang('en')}
@@ -1203,7 +1219,7 @@ export default function NewsManager() {
                             {/* 標題 */}
                             <div>
                                 <label className="block text-sm font-bold text-gray-600 mb-2">
-                                    {activeLang === 'zh' ? '標題 *' : 'Title *'}
+                                    {isZh ? '標題 *' : 'Title *'}
                                 </label>
                                 <input
                                     type="text"
@@ -1213,21 +1229,21 @@ export default function NewsManager() {
                                         [activeLang === 'zh' ? 'title' : 'title_en']: e.target.value
                                     }))}
                                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-red-300 outline-none text-gray-900"
-                                    placeholder={activeLang === 'zh' ? "輸入消息標題..." : "Enter news title..."}
+                                    placeholder={isZh ? "輸入消息標題..." : "Enter news title..."}
                                 />
                             </div>
 
                             {/* 分類 & 選項 */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-2">{activeLang === 'zh' ? '文章分類' : 'Category'}</label>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">{isZh ? '文章分類' : 'Category'}</label>
                                     <select
                                         value={formData.category}
                                         onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                                         className="w-full p-3 border rounded-lg text-gray-900"
                                     >
                                         {CATEGORY_OPTIONS.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{activeLang === 'zh' ? opt.label : opt.labelEn}</option>
+                                            <option key={opt.value} value={opt.value}>{isZh ? opt.label : opt.labelEn}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -1241,13 +1257,13 @@ export default function NewsManager() {
                                             className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                                         />
                                         <label htmlFor="pinned" className="text-gray-700 font-bold flex items-center gap-1 whitespace-nowrap">
-                                            <Pin size={16} /> 置頂文章 / Pinned
+                                            <Pin size={16} /> {lang === 'zh' ? '置頂文章 / Pinned' : 'Pinned'}
                                         </label>
 
                                         {formData.is_pinned && (
                                             <div className="ml-0 md:ml-4 flex items-center gap-2 mt-2 md:mt-0">
                                                 <label htmlFor="pinned_order" className="text-sm text-gray-500 font-bold whitespace-nowrap">
-                                                    順序 / Order :
+                                                    {lang === 'zh' ? '順序 / Order :' : 'Order:'}
                                                 </label>
                                                 <input
                                                     type="number"
@@ -1264,7 +1280,7 @@ export default function NewsManager() {
                                                     className="w-24 p-1 border border-gray-300 rounded text-center text-sm text-gray-900 bg-white"
                                                     min="0"
                                                 />
-                                                <span className="text-xs text-gray-400 whitespace-nowrap">(越小越前面 / Smaller is higher)</span>
+                                                <span className="text-xs text-gray-400 whitespace-nowrap">{lang === 'zh' ? '(越小越前面 / Smaller is higher)' : '(Smaller is higher)'}</span>
                                             </div>
                                         )}
                                     </div>
@@ -1273,7 +1289,7 @@ export default function NewsManager() {
 
                             {/* 封面圖片 */}
                             <div>
-                                <label className="block text-sm font-bold text-gray-600 mb-2">{activeLang === 'zh' ? '封面圖片 URL' : 'Cover Image URL'}</label>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">{isZh ? '封面圖片 URL' : 'Cover Image URL'}</label>
                                 <input
                                     type="text"
                                     value={formData.cover_image}
@@ -1286,7 +1302,7 @@ export default function NewsManager() {
                             {/* 摘要 */}
                             <div>
                                 <label className="block text-sm font-bold text-gray-600 mb-2">
-                                    {activeLang === 'zh' ? '摘要' : 'Summary'}
+                                    {isZh ? '摘要' : 'Summary'}
                                 </label>
                                 <textarea
                                     value={activeLang === 'zh' ? formData.excerpt : formData.excerpt_en}
@@ -1296,14 +1312,14 @@ export default function NewsManager() {
                                     }))}
                                     className="w-full p-3 border rounded-lg text-gray-900"
                                     rows={2}
-                                    placeholder={activeLang === 'zh' ? "簡短描述這則消息..." : "Brief summary..."}
+                                    placeholder={isZh ? "簡短描述這則消息..." : "Brief summary..."}
                                 />
                             </div>
 
                             {/* 內容編輯器 */}
                             <div>
                                 <label className="block text-sm font-bold text-gray-600 mb-2">
-                                    {activeLang === 'zh' ? '內文' : 'Content'}
+                                    {isZh ? '內文' : 'Content'}
                                 </label>
 
                                 {/* 編輯模式切換 Tab */}
@@ -1312,19 +1328,19 @@ export default function NewsManager() {
                                         onClick={() => setEditMode('visual')}
                                         className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 transition-colors ${editMode === 'visual' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                     >
-                                        <Layout size={16} /> {activeLang === 'zh' ? '視覺化編輯' : 'Visual Editor'}
+                                        <Layout size={16} /> {isZh ? '視覺化編輯' : 'Visual Editor'}
                                     </button>
                                     <button
                                         onClick={() => setEditMode('paste')}
                                         className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 transition-colors ${editMode === 'paste' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                     >
-                                        <Clipboard size={16} /> {activeLang === 'zh' ? '貼上內容' : 'Paste Content'}
+                                        <Clipboard size={16} /> {isZh ? '貼上內容' : 'Paste Content'}
                                     </button>
                                     <button
                                         onClick={() => setEditMode('upload')}
                                         className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 transition-colors ${editMode === 'upload' ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                     >
-                                        <Upload size={16} /> {activeLang === 'zh' ? '上傳檔案' : 'Upload File'}
+                                        <Upload size={16} /> {isZh ? '上傳檔案' : 'Upload File'}
                                     </button>
                                 </div>
 
@@ -1334,28 +1350,28 @@ export default function NewsManager() {
                                         {/* 工具列 */}
                                         <div className="flex flex-wrap gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
                                             <button onClick={() => addContentBlock('paragraph')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <Type size={14} /> {activeLang === 'zh' ? '段落' : 'Paragraph'}
+                                                <Type size={14} /> {isZh ? '段落' : 'Paragraph'}
                                             </button>
                                             <button onClick={() => addContentBlock('heading')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <Type size={14} className="font-bold" /> {activeLang === 'zh' ? '標題' : 'Heading'}
+                                                <Type size={14} className="font-bold" /> {isZh ? '標題' : 'Heading'}
                                             </button>
                                             <button onClick={() => addContentBlock('image')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <ImageIcon size={14} /> {activeLang === 'zh' ? '圖片' : 'Image'}
+                                                <ImageIcon size={14} /> {isZh ? '圖片' : 'Image'}
                                             </button>
                                             <button onClick={() => addContentBlock('video')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <Video size={14} /> {activeLang === 'zh' ? '影片' : 'Video'}
+                                                <Video size={14} /> {isZh ? '影片' : 'Video'}
                                             </button>
                                             <button onClick={() => addContentBlock('quote')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <Quote size={14} /> {activeLang === 'zh' ? '引言' : 'Quote'}
+                                                <Quote size={14} /> {isZh ? '引言' : 'Quote'}
                                             </button>
                                             <button onClick={() => addContentBlock('list')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <List size={14} /> {activeLang === 'zh' ? '清單' : 'List'}
+                                                <List size={14} /> {isZh ? '清單' : 'List'}
                                             </button>
                                             <button onClick={() => addContentBlock('link')} className="flex items-center gap-1 px-3 py-1.5 bg-white border rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <LinkIcon size={14} /> {activeLang === 'zh' ? '連結' : 'Link'}
+                                                <LinkIcon size={14} /> {isZh ? '連結' : 'Link'}
                                             </button>
                                             <button onClick={() => addContentBlock('details')} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 text-sm text-gray-700 shadow-sm">
-                                                <ChevronDown size={14} /> {activeLang === 'zh' ? '摺疊內容' : 'Details'}
+                                                <ChevronDown size={14} /> {isZh ? '摺疊內容' : 'Details'}
                                             </button>
                                         </div>
 
@@ -1390,7 +1406,7 @@ export default function NewsManager() {
 
                                             {(activeLang === 'zh' ? formData.content : formData.content_en).length === 0 && (
                                                 <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg">
-                                                    {activeLang === 'zh'
+                                                    {isZh
                                                         ? '點擊上方按鈕新增內容區塊，或切換到「貼上內容」/「上傳檔案」模式匯入文章'
                                                         : 'Click the buttons above to add content blocks, or switch to "Paste Content" / "Upload File" mode to import articles'
                                                     }
@@ -1405,23 +1421,23 @@ export default function NewsManager() {
                                     <div className="space-y-4 animate-fade-in-down">
                                         <div className="p-4 bg-gray-50 border rounded-lg">
                                             <p className="text-sm text-gray-600 mb-2 font-bold">
-                                                {activeLang === 'zh' ? '請貼上 Markdown 或 HTML 內容：' : 'Paste Markdown or HTML content:'}
+                                                {isZh ? '請貼上 Markdown 或 HTML 內容：' : 'Paste Markdown or HTML content:'}
                                             </p>
                                             <div className="text-xs text-gray-500 mb-3">
-                                                {activeLang === 'zh' ? '支援：## H2, ### H3, ![alt](url), > Quote, - List, [Link](url)' : 'Supports: ## H2, ### H3, ![alt](url), > Quote, - List, [Link](url)'}
+                                                {isZh ? '支援：## H2, ### H3, ![alt](url), > Quote, - List, [Link](url)' : 'Supports: ## H2, ### H3, ![alt](url), > Quote, - List, [Link](url)'}
                                             </div>
                                             <textarea
                                                 value={importText}
                                                 onChange={(e) => setImportText(e.target.value)}
                                                 className="w-full p-4 border rounded-lg text-gray-900 font-mono text-sm h-64 focus:ring-2 focus:ring-red-200 outline-none"
-                                                placeholder={activeLang === 'zh' ? `## 文章標題\n\n這裡是文章內容...\n\n![圖片描述](https://example.com/image.jpg)` : `## Article Title\n\nContent goes here...\n\n![Image](https://example.com/image.jpg)`}
+                                                placeholder={isZh ? `## 文章標題\n\n這裡是文章內容...\n\n![圖片描述](https://example.com/image.jpg)` : `## Article Title\n\nContent goes here...\n\n![Image](https://example.com/image.jpg)`}
                                             />
                                             <div className="flex justify-end mt-3">
                                                 <button
                                                     onClick={handleImport}
                                                     className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition flex items-center gap-2"
                                                 >
-                                                    <FileText size={16} /> {activeLang === 'zh' ? '解析並匯入' : 'Parse & Import'}
+                                                    <FileText size={16} /> {isZh ? '解析並匯入' : 'Parse & Import'}
                                                 </button>
                                             </div>
                                         </div>
@@ -1441,10 +1457,10 @@ export default function NewsManager() {
                                             <div className="pointer-events-none">
                                                 <FileUp size={48} className="mx-auto text-gray-400 mb-4" />
                                                 <p className="text-lg font-bold text-gray-600">
-                                                    {activeLang === 'zh' ? '點擊或拖曳檔案至此' : 'Click or drag file here'}
+                                                    {isZh ? '點擊或拖曳檔案至此' : 'Click or drag file here'}
                                                 </p>
                                                 <p className="text-sm text-gray-500 mt-2">
-                                                    {activeLang === 'zh' ? '支援 .md, .html, .txt 格式' : 'Supports .md, .html, .txt formats'}
+                                                    {isZh ? '支援 .md, .html, .txt 格式' : 'Supports .md, .html, .txt formats'}
                                                 </p>
                                             </div>
                                         </div>

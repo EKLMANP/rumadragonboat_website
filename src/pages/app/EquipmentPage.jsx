@@ -122,7 +122,7 @@ export default function EquipmentPage() {
                                                 <div className="w-24 h-24 rounded-full bg-white shadow flex items-center justify-center border-4 border-white overflow-hidden">
                                                     <img
                                                         src={imgUrl}
-                                                        alt={item.Item}
+                                                        alt={getTranslatedItemName(item.Item)}
                                                         className="w-full h-full object-contain p-2 transform group-hover:scale-110 transition duration-500"
                                                     />
                                                 </div>

@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import AppLayout from '../../components/AppLayout';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatMonthLabel } from '../../utils/i18n';
 import {
     ChevronLeft,
     ChevronRight,
@@ -22,6 +23,7 @@ const eventTypes = {
         color: 'bg-red-50 text-red-700 border-l-4 border-red-600',
         icon: '🏁',
         label: '主要賽事',
+        labelEn: 'Major Races',
         points: 2,
         dotColor: 'bg-red-600',
         badge: 'bg-red-100 text-red-700',
@@ -31,6 +33,7 @@ const eventTypes = {
         color: 'bg-slate-50 text-slate-700 border-l-4 border-slate-600',
         icon: '💪',
         label: '訓練計劃',
+        labelEn: 'Training Plan',
         points: 2,
         dotColor: 'bg-slate-600',
         badge: 'bg-slate-100 text-slate-700',
@@ -40,6 +43,7 @@ const eventTypes = {
         color: 'bg-emerald-50 text-emerald-700 border-l-4 border-emerald-500',
         icon: '🎉',
         label: 'Team Building',
+        labelEn: 'Team Building',
         points: 1,
         dotColor: 'bg-emerald-500',
         badge: 'bg-emerald-100 text-emerald-700',
@@ -49,6 +53,7 @@ const eventTypes = {
         color: 'bg-violet-50 text-violet-700 border-l-4 border-violet-500',
         icon: '🔥',
         label: '內部競賽',
+        labelEn: 'Internal Competition',
         points: 1,
         dotColor: 'bg-violet-500',
         badge: 'bg-violet-100 text-violet-700',
@@ -58,6 +63,7 @@ const eventTypes = {
         color: 'bg-amber-50 text-amber-700 border-l-4 border-amber-500',
         icon: '📢',
         label: '招募活動',
+        labelEn: 'Recruitment Event',
         points: 0,
         dotColor: 'bg-amber-500',
         badge: 'bg-amber-100 text-amber-700',
@@ -71,60 +77,78 @@ const initialEvents = [
         id: 1,
         date: '2026-01-10',
         title: '船練',
+        titleEn: 'Boat Practice',
         type: 'training',
         time: '08:00 - 11:00',
         location: '碧潭東岸',
+        locationEn: 'Bitan East Bank',
         description: '針對新進隊員的基礎划頻調整，請穿著隊服。',
+        descriptionEn: 'Basic stroke-rate tuning for new members. Please wear your team uniform.',
         registered: false
     },
     {
         id: 2,
         date: '2026-01-11',
         title: '龍舟體驗日 (招募)',
+        titleEn: 'Dragon Boat Experience Day (Recruiting)',
         type: 'recruiting',
         time: '09:00 - 16:00',
         location: '大佳河濱公園',
+        locationEn: 'Dajia Riverside Park',
         description: '2026年度首場公開招募，請隊員協助轉發 IG 限動。',
+        descriptionEn: 'First public recruitment event of 2026. Please help reshare the IG story.',
         registered: false
     },
     {
         id: 3,
         date: '2026-01-17',
         title: '減脂大賽: 初始測量',
+        titleEn: 'Fat-Loss Challenge: Initial Measurement',
         type: 'campaign',
         time: '10:00 - 12:00',
         location: 'RUMA 基地',
+        locationEn: 'RUMA Base',
         description: '為期三個月的減脂挑戰開始！現場測量 InBody。',
+        descriptionEn: 'The three-month fat-loss challenge begins! InBody measurements on site.',
         registered: false
     },
     {
         id: 4,
         date: '2026-01-24',
         title: '冬季長距離耐力練',
+        titleEn: 'Winter Long-Distance Endurance Practice',
         type: 'training',
         time: '07:30 - 11:30',
         location: '碧潭',
+        locationEn: 'Bitan',
         description: '備戰城市盃，今日課表為 500m x 10 趟。',
+        descriptionEn: 'Preparing for the City Cup. Today\'s set is 500m x 10.',
         registered: false
     },
     {
         id: 5,
         date: '2026-01-31',
         title: 'RUMA 年度春酒',
+        titleEn: 'RUMA Annual Spring Banquet',
         type: 'social',
         time: '18:00 - 21:30',
         location: '金色三麥 信義店',
+        locationEn: 'Jin Se San Mai, Xinyi Branch',
         description: '辛苦了一年，大家一起來吃喝！當天有抽獎活動。',
+        descriptionEn: 'Thanks for a great year, let\'s eat and drink together! There will be a raffle on the day.',
         registered: false
     },
     {
         id: 6,
         date: '2026-02-14',
         title: '情人節特訓',
+        titleEn: 'Valentine\'s Day Special Practice',
         type: 'training',
         time: '08:00 - 11:00',
         location: '碧潭',
+        locationEn: 'Bitan',
         description: '一起在水上度過浪漫的情人節！',
+        descriptionEn: 'Let\'s spend a romantic Valentine\'s Day on the water!',
         registered: false
     }
 ];
@@ -145,6 +169,10 @@ export default function AnnouncementsPage() {
     const [userRegisteredEvents, setUserRegisteredEvents] = useState([]);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: null, event: null });
+
+    // 顯示文字：英文模式優先使用 *En 欄位（mock 活動資料）
+    const evText = (obj, field) => (lang === 'zh' ? obj[field] : (obj[`${field}En`] || obj[field]));
+    const typeLabel = (type) => evText(eventTypes[type], 'label');
 
     // 導航函數
     const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
@@ -220,7 +248,7 @@ export default function AnnouncementsPage() {
                                     flex items-center justify-between font-medium
                                 `}
                             >
-                                <span className="truncate">{event.title}</span>
+                                <span className="truncate">{evText(event, 'title')}</span>
                                 {event.registered && <CheckCircle size={12} className="text-emerald-600 ml-1 flex-shrink-0" />}
                             </div>
                         ))}
@@ -234,9 +262,9 @@ export default function AnnouncementsPage() {
     // 渲染年度總覽
     const renderYearGrid = () => {
         const year = currentDate.getFullYear();
-        const months = lang === 'zh'
-            ? ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
-            : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const months = Array.from({ length: 12 }, (_, i) =>
+            lang === 'zh' ? `${i + 1}月` : formatMonthLabel(i + 1, lang)
+        );
 
         return (
             <div className="grid grid-cols-3 md:grid-cols-4 gap-4 p-4">
@@ -280,7 +308,7 @@ export default function AnnouncementsPage() {
                                         <ChevronLeft size={20} />
                                     </button>
                                     <span className="text-xl md:text-2xl font-extrabold text-slate-900 w-36 md:w-44 text-center tracking-tight">
-                                        {lang === 'zh' ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月` : `${currentDate.toLocaleString('default', { month: 'long' })} ${currentDate.getFullYear()}`}
+                                        {lang === 'zh' ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月` : `${currentDate.toLocaleString('en-US', { month: 'long' })} ${currentDate.getFullYear()}`}
                                     </span>
                                     <button onClick={nextMonth} className="p-2 hover:bg-slate-50 rounded-full text-slate-500 transition-colors">
                                         <ChevronRight size={20} />
@@ -329,7 +357,7 @@ export default function AnnouncementsPage() {
                             {Object.entries(eventTypes).map(([key, value]) => (
                                 <div key={key} className="flex items-center text-xs font-medium text-slate-600">
                                     <div className={`w-2.5 h-2.5 rounded-full mr-1.5 ${value.dotColor}`}></div>
-                                    {value.label}
+                                    {evText(value, 'label')}
                                 </div>
                             ))}
                         </div>
@@ -395,7 +423,7 @@ export default function AnnouncementsPage() {
                             {userRegisteredEvents.slice(0, 3).map(e => (
                                 <div key={e.id} className="text-xs p-2.5 bg-slate-50 rounded border border-slate-100 truncate flex items-center text-slate-700">
                                     <div className={`w-2 h-2 rounded-full mr-2 ${eventTypes[e.type].dotColor}`}></div>
-                                    {e.date} {e.title}
+                                    {e.date} {evText(e, 'title')}
                                 </div>
                             ))}
                             {userRegisteredEvents.length === 0 && (
@@ -426,7 +454,7 @@ export default function AnnouncementsPage() {
                         <div className={`p-6 ${eventTypes[selectedEvent.type].headerBg} relative border-b border-slate-100`}>
                             <div className="flex items-center space-x-2 mb-3 mt-2">
                                 <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${eventTypes[selectedEvent.type].badge}`}>
-                                    {eventTypes[selectedEvent.type].label}
+                                    {typeLabel(selectedEvent.type)}
                                 </span>
                                 {eventTypes[selectedEvent.type].points > 0 && (
                                     <span className="text-xs font-bold px-2.5 py-1 bg-yellow-400 text-yellow-900 rounded-md flex items-center shadow-sm">
@@ -436,7 +464,7 @@ export default function AnnouncementsPage() {
                                 )}
                             </div>
                             <h2 className="text-2xl font-extrabold text-slate-900 leading-tight pr-8">
-                                {selectedEvent.title}
+                                {evText(selectedEvent, 'title')}
                             </h2>
                         </div>
 
@@ -457,14 +485,14 @@ export default function AnnouncementsPage() {
                                 </div>
                                 <div>
                                     <p className="font-bold text-slate-900 text-sm mb-0.5">{lang === 'zh' ? '地點' : 'Location'}</p>
-                                    <p className="text-sm font-medium">{selectedEvent.location}</p>
+                                    <p className="text-sm font-medium">{evText(selectedEvent, 'location')}</p>
                                 </div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <div className="flex items-start space-x-2">
                                     <Info size={16} className="text-slate-400 mt-1 flex-shrink-0" />
                                     <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                                        {selectedEvent.description}
+                                        {evText(selectedEvent, 'description')}
                                     </p>
                                 </div>
                             </div>
@@ -519,10 +547,10 @@ export default function AnnouncementsPage() {
                                 {confirmModal.type === 'cancel'
                                     ? (lang === 'zh'
                                         ? `您正在取消「${confirmModal.event?.title}」。取消後可能無法獲得 M 點獎勵。`
-                                        : `You are cancelling "${confirmModal.event?.title}". You may lose M Points.`)
+                                        : `You are cancelling "${confirmModal.event && evText(confirmModal.event, 'title')}". You may lose M Points.`)
                                     : (lang === 'zh'
                                         ? `您即將報名「${confirmModal.event?.title}」。`
-                                        : `You are registering for "${confirmModal.event?.title}".`)
+                                        : `You are registering for "${confirmModal.event && evText(confirmModal.event, 'title')}".`)
                                 }
                             </p>
                         </div>

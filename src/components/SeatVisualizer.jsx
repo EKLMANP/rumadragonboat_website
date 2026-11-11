@@ -2,9 +2,11 @@
 import React, { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { Download, MapPin, Clock } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // --- 獨立的 Seat 元件 ---
 const Seat = ({ user, side, index, isSelected, isEditable, onClick }) => {
+  const { lang } = useLanguage();
   return (
     <div
       onClick={() => onClick(side, index)}
@@ -20,7 +22,7 @@ const Seat = ({ user, side, index, isSelected, isEditable, onClick }) => {
       style={{ minWidth: '80px' }}
     >
       <span className="font-bold text-gray-800 text-sm md:text-base text-center leading-tight">
-        {user ? user.Name : "空"}
+        {user ? user.Name : (lang === 'zh' ? '空' : 'Empty')}
       </span>
       <span className="absolute top-0 right-1 text-[10px] text-gray-400 opacity-50">
         {side === 'left' ? 'L' : 'R'}{index + 1}
@@ -31,6 +33,7 @@ const Seat = ({ user, side, index, isSelected, isEditable, onClick }) => {
 
 // --- 主元件 ---
 const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, isEditable = false, selectedSeat, onSelect }) => {
+  const { lang } = useLanguage();
   const boatRef = useRef(null);
 
   const displayPlace = location || place;
@@ -64,7 +67,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
       link.click();
     } catch (err) {
       console.error("Image generation failed", err);
-      alert("圖片生成失敗，請稍後再試");
+      alert(lang === 'zh' ? '圖片生成失敗，請稍後再試' : 'Image generation failed. Please try again later.');
     }
   };
 
@@ -73,7 +76,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
     onSelect({ side, index });
   };
 
-  if (!boatData) return <div className="text-gray-400 text-center py-4">尚無資料</div>;
+  if (!boatData) return <div className="text-gray-400 text-center py-4">{lang === 'zh' ? '尚無資料' : 'No data yet'}</div>;
 
   const isSteerSelected = selectedSeat?.side === 'steer';
   const isDrummerSelected = selectedSeat?.side === 'drummer';
@@ -90,7 +93,9 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
               ? 'bg-orange-500 text-white border-orange-600 animate-pulse'
               : 'bg-orange-50 text-orange-600 border-orange-200'}
             `}>
-            {selectedSeat ? "👇 請點擊第二個位置進行交換" : "👆 點擊任意兩個位置 (含鼓手/舵手) 可交換位置"}
+            {selectedSeat
+              ? (lang === 'zh' ? '👇 請點擊第二個位置進行交換' : '👇 Tap a second seat to swap')
+              : (lang === 'zh' ? '👆 點擊任意兩個位置 (含鼓手/舵手) 可交換位置' : '👆 Tap any two seats (incl. drummer/steer) to swap')}
           </div>
         )}
       </div>
@@ -106,15 +111,15 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
         {/* 標題區 */}
         <div className="flex justify-between items-center w-full mb-6 border-b-2 border-sky-100 pb-4 z-10 flex-col md:flex-row gap-4">
           <div className="flex flex-col items-start w-full md:w-auto">
-            <h2 className="text-2xl font-extrabold text-sky-800 tracking-tight">{title || `${date} 訓練槳位`}</h2>
+            <h2 className="text-2xl font-extrabold text-sky-800 tracking-tight">{title || (lang === 'zh' ? `${date} 訓練槳位` : `${date} Training Seating`)}</h2>
             {displayPlace && (
               <div className="flex items-center gap-1 text-sky-600 font-bold mt-1 text-sm bg-sky-50 px-2 py-1 rounded-md w-full md:w-auto">
-                <MapPin size={16} /> 地點 Place：{displayPlace}
+                <MapPin size={16} /> {lang === 'zh' ? '地點 Place：' : 'Place: '}{displayPlace}
               </div>
             )}
             {time && (
               <div className="flex items-center gap-1 text-orange-600 font-bold mt-1 text-sm bg-orange-50 px-2 py-1 rounded-md w-full md:w-auto">
-                <Clock size={16} /> 集合時間 Meeting time：{time}
+                <Clock size={16} /> {lang === 'zh' ? '集合時間 Meeting time：' : 'Meeting time: '}{time}
               </div>
             )}
           </div>
@@ -144,7 +149,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
             >
               {/* 修正：文字置中與大小微調 */}
               <span className="font-black text-[9px] text-red-700 uppercase tracking-widest leading-none mb-0.5 mt-1">DRUMMER</span>
-              <span className="font-black text-xs text-red-700 uppercase tracking-widest leading-none">鼓手</span>
+              <span className="font-black text-xs text-red-700 uppercase tracking-widest leading-none">{lang === 'zh' ? '鼓手' : 'Drummer'}</span>
               <span className="font-extrabold text-sm text-gray-800 text-center leading-tight px-1 mt-0.5 w-full">
                 {boatData.drummer ? boatData.drummer.Name : "?"}
               </span>
@@ -183,7 +188,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
             );
           })}
 
-          <div className="text-center text-sky-400 text-xs pt-2 font-black tracking-[0.2em] uppercase">▼ Stern (船尾)</div>
+          <div className="text-center text-sky-400 text-xs pt-2 font-black tracking-[0.2em] uppercase">{lang === 'zh' ? '▼ Stern (船尾)' : '▼ Stern'}</div>
         </div>
 
         {/* 舵手位置 (Steer) */}
@@ -202,7 +207,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
              `}
           >
             <span className="font-black text-[9px] text-yellow-700 uppercase tracking-widest leading-none mb-0.5 mt-1">STEER</span>
-            <span className="font-black text-xs text-yellow-700 uppercase tracking-widest leading-none">舵手</span>
+            <span className="font-black text-xs text-yellow-700 uppercase tracking-widest leading-none">{lang === 'zh' ? '舵手' : 'Steer'}</span>
             <span className="font-extrabold text-sm text-gray-800 text-center leading-tight px-1 mt-0.5 w-full">
               {boatData.steer ? boatData.steer.Name : "?"}
             </span>
@@ -213,15 +218,15 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
         {isEditable && (
           <div className="w-full mt-6 pt-6 border-t-2 border-dashed border-gray-200">
             <h3 className="text-sm font-bold text-gray-500 mb-3 flex items-center justify-between">
-              <span>候補名單 / 未排入 (Reserve)</span>
+              <span>{lang === 'zh' ? '候補名單 / 未排入 (Reserve)' : 'Reserve / Unassigned'}</span>
               <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
-                {(boatData.reserve && boatData.reserve.length) || 0} 人
+                {(boatData.reserve && boatData.reserve.length) || 0}{lang === 'zh' ? ' 人' : ' people'}
               </span>
             </h3>
             
             {(!boatData.reserve || boatData.reserve.length === 0) ? (
               <div className="w-full bg-gray-50 border border-gray-100 rounded-lg p-3 text-center text-gray-400 text-xs font-medium">
-                目前全數排入座位，無候補人員 (No reserves)
+                {lang === 'zh' ? '目前全數排入座位，無候補人員 (No reserves)' : 'Everyone is seated — no reserves'}
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -245,7 +250,7 @@ const SeatVisualizer = ({ boatData, date, title, location, place, time, onSwap, 
         className="mt-8 flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold rounded-full shadow-xl transition-all transform hover:-translate-y-1 active:scale-95"
       >
         <Download size={24} />
-        下載高畫質座位圖 (HD)
+        {lang === 'zh' ? '下載高畫質座位圖 (HD)' : 'Download HD seating chart'}
       </button>
     </div>
   );

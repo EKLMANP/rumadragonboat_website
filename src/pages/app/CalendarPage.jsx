@@ -7,6 +7,7 @@ import AppLayout from '../../components/AppLayout';
 import { Calendar, ChevronLeft, ChevronRight, MapPin, Clock, Ship, X } from 'lucide-react';
 import { fetchActivities, fetchActivityRegistrations } from '../../api/supabaseApi';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatMonthLabel } from '../../utils/i18n';
 
 export default function CalendarPage() {
     const navigate = useNavigate();
@@ -161,7 +162,7 @@ export default function CalendarPage() {
                                     className="px-3 py-2 border border-gray-200 rounded-lg text-gray-800 font-bold focus:ring-2 focus:ring-sky-500 outline-none"
                                 >
                                     {monthNames.map((name, idx) => (
-                                        <option key={idx} value={idx}>{name}</option>
+                                        <option key={idx} value={idx}>{lang === 'zh' ? name : formatMonthLabel(idx + 1, lang)}</option>
                                     ))}
                                 </select>
                             </div>

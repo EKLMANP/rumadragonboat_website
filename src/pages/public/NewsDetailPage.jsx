@@ -143,7 +143,7 @@ export default function NewsDetailPage() {
             {isPreview && (
                 <div className="bg-yellow-500 text-black text-center py-2.5 px-4 font-bold text-sm flex items-center justify-center gap-2">
                     <Eye size={16} />
-                    草稿預覽模式 — 此文章尚未正式發布，僅供審核使用
+                    {lang === 'zh' ? '草稿預覽模式 — 此文章尚未正式發布，僅供審核使用' : 'Draft preview mode — this article has not been published yet and is for review only'}
                 </div>
             )}
 

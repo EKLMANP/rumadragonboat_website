@@ -255,7 +255,10 @@ export default function PracticePage() {
                 '船練': 'boat_practice',
                 'Team Building': 'team_building',
                 '龍舟比賽': 'race',
-                '內部競賽': 'internal_competition'
+                '內部競賽': 'internal_competition',
+                'Boat Practice': 'boat_practice',
+                'Dragon Boat Race': 'race',
+                'Internal Competition': 'internal_competition'
             };
             setSelectedCategory(typeMap[activity.type] || 'boat_practice');
         }
@@ -423,11 +426,19 @@ export default function PracticePage() {
 
     const handleSubmit = async () => {
         if (!user) {
-            Swal.fire('請先登入', '需要登入才能報名活動', 'warning');
+            Swal.fire(
+                lang === 'zh' ? '請先登入' : 'Please log in',
+                lang === 'zh' ? '需要登入才能報名活動' : 'You need to log in to register for activities',
+                'warning'
+            );
             return;
         }
         if (selectedActivities.length === 0) {
-            Swal.fire('請選擇活動', '要勾選想參加的活動喔', 'warning');
+            Swal.fire(
+                lang === 'zh' ? '請選擇活動' : 'Please select an activity',
+                lang === 'zh' ? '要勾選想參加的活動喔' : 'Check the activities you want to join.',
+                'warning'
+            );
             return;
         }
 
@@ -438,12 +449,12 @@ export default function PracticePage() {
             .join('\n• ');
 
         const result = await Swal.fire({
-            title: '確認報名',
-            html: `<p>您即將報名以下活動：</p><p style="text-align:left; margin-top:10px;">• ${selectedActNames}</p>`,
+            title: lang === 'zh' ? '確認報名' : 'Confirm Registration',
+            html: `<p>${lang === 'zh' ? '您即將報名以下活動：' : 'You are about to register for the following activities:'}</p><p style="text-align:left; margin-top:10px;">• ${selectedActNames}</p>`,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: '確認報名',
-            cancelButtonText: '再想想',
+            confirmButtonText: lang === 'zh' ? '確認報名' : 'Confirm',
+            cancelButtonText: lang === 'zh' ? '再想想' : 'Not yet',
             confirmButtonColor: '#0ea5e9'
         });
 
@@ -463,24 +474,32 @@ export default function PracticePage() {
             }
 
             setLoading(false); // hide spinner before Swal
-            await Swal.fire('報名成功!', '已成功報名選擇的活動', 'success');
+            await Swal.fire(
+                lang === 'zh' ? '報名成功!' : 'Registered!',
+                lang === 'zh' ? '已成功報名選擇的活動' : 'You have registered for the selected activities.',
+                'success'
+            );
             setSelectedActivities([]);
             loadData(true); // silent background reload
         } catch (error) {
             console.error('Submit error:', error);
             setLoading(false); // hide spinner before Swal
-            Swal.fire('報名失敗', '請稍後再試', 'error');
+            Swal.fire(
+                lang === 'zh' ? '報名失敗' : 'Registration failed',
+                lang === 'zh' ? '請稍後再試' : 'Please try again later.',
+                'error'
+            );
         }
     };
 
     const handleCancel = async (registrationId, activityName) => {
         const result = await Swal.fire({
-            title: `取消報名?`,
-            text: `確定要取消「${activityName}」嗎？`,
+            title: lang === 'zh' ? '取消報名?' : 'Cancel registration?',
+            text: lang === 'zh' ? `確定要取消「${activityName}」嗎？` : `Are you sure you want to cancel "${activityName}"?`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: '確定取消',
-            cancelButtonText: '再想想',
+            confirmButtonText: lang === 'zh' ? '確定取消' : 'Yes, cancel',
+            cancelButtonText: lang === 'zh' ? '再想想' : 'Not yet',
             confirmButtonColor: '#d33',
         });
 
@@ -495,12 +514,16 @@ export default function PracticePage() {
                 if (error) throw error;
 
                 setLoading(false); // hide spinner before Swal
-                Swal.fire('已取消', '', 'success');
+                Swal.fire(lang === 'zh' ? '已取消' : 'Cancelled', '', 'success');
                 loadData(true); // silent background reload
             } catch (error) {
                 console.error('Cancel error:', error);
                 setLoading(false); // hide spinner before Swal
-                Swal.fire('取消失敗', '請稍後再試', 'error');
+                Swal.fire(
+                    lang === 'zh' ? '取消失敗' : 'Cancellation failed',
+                    lang === 'zh' ? '請稍後再試' : 'Please try again later.',
+                    'error'
+                );
             }
         }
     };
@@ -823,7 +846,7 @@ export default function PracticePage() {
                                                         <button
                                                             onClick={() => handleCancel(reg.id, reg.activities?.name)}
                                                             className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition"
-                                                            title="取消報名"
+                                                            title={lang === 'zh' ? '取消報名' : 'Cancel registration'}
                                                         >
                                                             <Trash2 size={20} />
                                                         </button>

@@ -61,7 +61,7 @@ export default function Navbar() {
         if (isAuthenticated) fetchMemberData();
     }, [userProfile, isAuthenticated]);
 
-    const displayName = memberName || userProfile?.name || '會員';
+    const displayName = memberName || userProfile?.name || (lang === 'zh' ? '會員' : 'Member');
 
     // 點擊外部關閉下拉選單
     useEffect(() => {
@@ -267,7 +267,7 @@ export default function Navbar() {
                                 <button
                                     onClick={toggleLanguage}
                                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${textColorSecondary} ${hoverBg}`}
-                                    title={lang === 'zh' ? 'Switch to English' : '切換為中文'}
+                                    title={lang === 'zh' ? 'Switch to English' : 'Switch to Chinese'}
                                 >
                                     <Globe size={18} />
                                     <span className="hidden sm:inline">{lang === 'zh' ? 'EN' : '中文'}</span>
@@ -299,7 +299,7 @@ export default function Navbar() {
                                                 {/* 頭像 */}
                                                 <div className="w-10 h-10 rounded-full overflow-hidden bg-sky-100 flex items-center justify-center flex-shrink-0">
                                                     {avatarUrl ? (
-                                                        <img src={avatarUrl} alt="頭像" className="w-full h-full object-cover" />
+                                                        <img src={avatarUrl} alt={lang === 'zh' ? '頭像' : 'Avatar'} className="w-full h-full object-cover" />
                                                     ) : (
                                                         <span className="text-lg font-bold text-sky-700">{displayName.charAt(0).toUpperCase()}</span>
                                                     )}
@@ -357,7 +357,7 @@ export default function Navbar() {
                                 <button
                                     onClick={toggleLanguage}
                                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${textColorSecondary} ${hoverBg}`}
-                                    title={lang === 'zh' ? 'Switch to English' : '切換為中文'}
+                                    title={lang === 'zh' ? 'Switch to English' : 'Switch to Chinese'}
                                 >
                                     <Globe size={18} />
                                     <span className="hidden sm:inline">{lang === 'zh' ? 'EN' : '中文'}</span>

@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { clearUserCache, escapeLike } from '../api/supabaseApi';
+import { tr } from '../utils/i18n';
 
 // 角色定義
 export const ROLES = {
@@ -126,7 +127,7 @@ export function AuthProvider({ children }) {
                 console.warn('取得使用者資料失敗:', error.message);
                 return {
                     id: userId,
-                    name: email?.split('@')[0] || '會員',
+                    name: email?.split('@')[0] || tr('會員', 'Member'),
                     email: email
                 };
             }
@@ -141,14 +142,14 @@ export function AuthProvider({ children }) {
 
             return {
                 id: userId,
-                name: email?.split('@')[0] || '會員',
+                name: email?.split('@')[0] || tr('會員', 'Member'),
                 email: email
             };
         } catch (err) {
             console.warn('取得使用者資料錯誤:', err);
             return {
                 id: userId,
-                name: email?.split('@')[0] || '會員',
+                name: email?.split('@')[0] || tr('會員', 'Member'),
                 email: email
             };
         }
@@ -184,7 +185,7 @@ export function AuthProvider({ children }) {
             const quickProfile = {
                 id: authUser.id,
                 email: authUser.email,
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || '會員',
+                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || tr('會員', 'Member'),
                 avatar_url: authUser.user_metadata?.avatar_url || null
             };
             setUserProfile(quickProfile);
@@ -247,7 +248,7 @@ export function AuthProvider({ children }) {
                         const quickProfile = {
                             id: session.user.id,
                             email: session.user.email,
-                            name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || '會員'
+                            name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || tr('會員', 'Member')
                         };
                         setUserProfile(quickProfile);
 
@@ -313,7 +314,7 @@ export function AuthProvider({ children }) {
                     const quickProfile = {
                         id: session.user.id,
                         email: session.user.email,
-                        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || '會員'
+                        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || tr('會員', 'Member')
                     };
                     setUserProfile(quickProfile);
 
@@ -381,10 +382,10 @@ export function AuthProvider({ children }) {
 
             // 判斷是否為網路錯誤
             if (err.message === 'Login timeout') {
-                return { success: false, error: { message: '連線逾時，請檢查網路狀況' } };
+                return { success: false, error: { message: tr('連線逾時，請檢查網路狀況', 'Connection timed out. Please check your network.') } };
             }
             if (err.message === 'Failed to fetch' || err.message.includes('Network request failed')) {
-                return { success: false, error: { message: '網路連線失敗，請檢查您的網路或關閉 VPN/攔截器' } };
+                return { success: false, error: { message: tr('網路連線失敗，請檢查您的網路或關閉 VPN/攔截器', 'Network connection failed. Please check your network or turn off any VPN/ad blocker.') } };
             }
 
             return { success: false, error: err };

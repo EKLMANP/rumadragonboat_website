@@ -7,9 +7,11 @@ import AppLayout from '../../components/AppLayout';
 import { supabase } from '../../lib/supabase';
 import Swal from 'sweetalert2';
 import { User, Camera, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ProfilePage() {
     const { userProfile, refreshUserProfile } = useAuth();
+    const { lang } = useLanguage();
     const fileInputRef = useRef(null);
 
     // 表單狀態
@@ -43,13 +45,13 @@ export default function ProfilePage() {
 
         // 驗證檔案類型
         if (!file.type.startsWith('image/')) {
-            Swal.fire('錯誤', '請選擇圖片檔案', 'error');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '請選擇圖片檔案' : 'Please select an image file', 'error');
             return;
         }
 
         // 驗證檔案大小 (最大 2MB)
         if (file.size > 2 * 1024 * 1024) {
-            Swal.fire('錯誤', '圖片大小不能超過 2MB', 'error');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '圖片大小不能超過 2MB' : 'Image size cannot exceed 2MB', 'error');
             return;
         }
 
@@ -66,7 +68,7 @@ export default function ProfilePage() {
     // 儲存個人資料 (優化版 - 完全非阻塞，適應慢網路)
     const handleSaveProfile = async () => {
         if (!displayName.trim()) {
-            Swal.fire('錯誤', '請輸入顯示名稱', 'warning');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '請輸入顯示名稱' : 'Please enter a display name', 'warning');
             return;
         }
 
@@ -77,7 +79,7 @@ export default function ProfilePage() {
             const trimmedName = displayName.trim();
 
             // Helper for timeout
-            const withTimeout = (promise, ms = 15000, errorMsg = '請求超時，請檢查網路連線') => {
+            const withTimeout = (promise, ms = 15000, errorMsg = lang === 'zh' ? '請求超時，請檢查網路連線' : 'Request timed out. Please check your network connection.') => {
                 return Promise.race([
                     promise,
                     new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
@@ -95,12 +97,12 @@ export default function ProfilePage() {
                         .from('avatars')
                         .upload(filePath, avatarFile, { upsert: true }),
                     30000, // 上傳給予較長時間 30s
-                    '圖片上傳超時，請稍後再試'
+                    lang === 'zh' ? '圖片上傳超時，請稍後再試' : 'Image upload timed out. Please try again later.'
                 );
 
                 if (uploadError) {
                     console.warn('頭像上傳失敗:', uploadError.message);
-                    throw new Error('頭像上傳失敗，請稍後再試');
+                    throw new Error(lang === 'zh' ? '頭像上傳失敗，請稍後再試' : 'Avatar upload failed. Please try again later.');
                 }
 
                 // 2. 取得公開 URL (加上時間戳記以避免快取)
@@ -127,7 +129,7 @@ export default function ProfilePage() {
                     .update(updates)
                     .eq('email', userProfile.email),
                 10000,
-                '資料更新超時，請稍後再試'
+                lang === 'zh' ? '資料更新超時，請稍後再試' : 'Profile update timed out. Please try again later.'
             );
 
             if (dbError) {
@@ -162,15 +164,15 @@ export default function ProfilePage() {
             // 成功提示
             Swal.fire({
                 icon: 'success',
-                title: '成功',
-                text: '個人資料已更新',
+                title: lang === 'zh' ? '成功' : 'Success',
+                text: lang === 'zh' ? '個人資料已更新' : 'Profile updated',
                 timer: 1500,
                 showConfirmButton: false
             });
 
         } catch (error) {
             console.error('Save error:', error);
-            Swal.fire('錯誤', error.message || '儲存失敗', 'error');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', error.message || (lang === 'zh' ? '儲存失敗' : 'Failed to save'), 'error');
         } finally {
             setIsSaving(false);
         }
@@ -179,17 +181,17 @@ export default function ProfilePage() {
     // 變更密碼
     const handleChangePassword = async () => {
         if (!newPassword || !confirmPassword) {
-            Swal.fire('錯誤', '請填寫新密碼', 'warning');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '請填寫新密碼' : 'Please fill in the new password', 'warning');
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Swal.fire('錯誤', '兩次輸入的密碼不一致', 'warning');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '兩次輸入的密碼不一致' : 'The two passwords do not match', 'warning');
             return;
         }
 
         if (newPassword.length < 6) {
-            Swal.fire('錯誤', '密碼長度至少 6 個字元', 'warning');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', lang === 'zh' ? '密碼長度至少 6 個字元' : 'Password must be at least 6 characters', 'warning');
             return;
         }
 
@@ -206,10 +208,10 @@ export default function ProfilePage() {
             setConfirmPassword('');
             setCurrentPassword('');
 
-            Swal.fire('成功', '密碼已變更', 'success');
+            Swal.fire(lang === 'zh' ? '成功' : 'Success', lang === 'zh' ? '密碼已變更' : 'Password changed', 'success');
         } catch (error) {
             console.error('Password change error:', error);
-            Swal.fire('錯誤', error.message || '密碼變更失敗', 'error');
+            Swal.fire(lang === 'zh' ? '錯誤' : 'Error', error.message || (lang === 'zh' ? '密碼變更失敗' : 'Failed to change password'), 'error');
         } finally {
             setIsChangingPassword(false);
         }
@@ -218,10 +220,10 @@ export default function ProfilePage() {
     // 取得頭像顯示內容
     const getAvatarDisplay = () => {
         if (avatarPreview) {
-            return <img src={avatarPreview} alt="預覽" className="w-full h-full object-cover" />;
+            return <img src={avatarPreview} alt={lang === 'zh' ? '預覽' : 'Preview'} className="w-full h-full object-cover" />;
         }
         if (avatarUrl) {
-            return <img src={avatarUrl} alt="頭像" className="w-full h-full object-cover" />;
+            return <img src={avatarUrl} alt={lang === 'zh' ? '頭像' : 'Avatar'} className="w-full h-full object-cover" />;
         }
         return <span className="text-4xl font-bold text-sky-700">{displayName?.charAt(0)?.toUpperCase() || 'U'}</span>;
     };
@@ -233,9 +235,9 @@ export default function ProfilePage() {
                 <div className="text-center mb-8">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center gap-3">
                         <User size={32} className="text-blue-600" />
-                        個人資料
+                        {lang === 'zh' ? '個人資料' : 'Profile'}
                     </h1>
-                    <p className="text-gray-500 mt-2">管理您的帳號資訊</p>
+                    <p className="text-gray-500 mt-2">{lang === 'zh' ? '管理您的帳號資訊' : 'Manage your account information'}</p>
                 </div>
 
                 {/* 頭像區塊 */}
@@ -261,27 +263,27 @@ export default function ProfilePage() {
                                 className="hidden"
                             />
                         </div>
-                        <p className="text-sm text-gray-500 mt-3">點擊相機圖示更換頭像</p>
+                        <p className="text-sm text-gray-500 mt-3">{lang === 'zh' ? '點擊相機圖示更換頭像' : 'Click the camera icon to change your avatar'}</p>
                     </div>
 
                     {/* 顯示名稱 */}
                     <div className="mt-8">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            顯示名稱
+                            {lang === 'zh' ? '顯示名稱' : 'Display Name'}
                         </label>
                         <input
                             type="text"
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-800"
-                            placeholder="請輸入您的名稱"
+                            placeholder={lang === 'zh' ? '請輸入您的名稱' : 'Enter your name'}
                         />
                     </div>
 
                     {/* 電子郵件 (唯讀) */}
                     <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            電子郵件
+                            {lang === 'zh' ? '電子郵件' : 'Email'}
                         </label>
                         <input
                             type="email"
@@ -289,7 +291,7 @@ export default function ProfilePage() {
                             disabled
                             className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
                         />
-                        <p className="text-xs text-gray-400 mt-1">電子郵件無法變更</p>
+                        <p className="text-xs text-gray-400 mt-1">{lang === 'zh' ? '電子郵件無法變更' : 'Email cannot be changed'}</p>
                     </div>
 
                     {/* 儲存按鈕 */}
@@ -303,7 +305,7 @@ export default function ProfilePage() {
                         ) : (
                             <Save size={20} />
                         )}
-                        {isSaving ? '儲存中...' : '儲存個人資料'}
+                        {isSaving ? (lang === 'zh' ? '儲存中...' : 'Saving...') : (lang === 'zh' ? '儲存個人資料' : 'Save Profile')}
                     </button>
                 </div>
 
@@ -311,14 +313,14 @@ export default function ProfilePage() {
                 <div className="bg-white rounded-2xl shadow-lg p-8">
                     <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6">
                         <Lock size={20} className="text-blue-600" />
-                        變更密碼
+                        {lang === 'zh' ? '變更密碼' : 'Change Password'}
                     </h2>
 
                     <div className="space-y-4">
                         {/* 新密碼 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                新密碼
+                                {lang === 'zh' ? '新密碼' : 'New Password'}
                             </label>
                             <div className="relative">
                                 <input
@@ -326,7 +328,7 @@ export default function ProfilePage() {
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-800 pr-12"
-                                    placeholder="請輸入新密碼"
+                                    placeholder={lang === 'zh' ? '請輸入新密碼' : 'Enter new password'}
                                 />
                                 <button
                                     type="button"
@@ -341,14 +343,14 @@ export default function ProfilePage() {
                         {/* 確認密碼 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                確認新密碼
+                                {lang === 'zh' ? '確認新密碼' : 'Confirm New Password'}
                             </label>
                             <input
                                 type={showPasswords ? 'text' : 'password'}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-800"
-                                placeholder="請再次輸入新密碼"
+                                placeholder={lang === 'zh' ? '請再次輸入新密碼' : 'Re-enter new password'}
                             />
                         </div>
 
@@ -363,7 +365,7 @@ export default function ProfilePage() {
                             ) : (
                                 <Lock size={20} />
                             )}
-                            {isChangingPassword ? '變更中...' : '變更密碼'}
+                            {isChangingPassword ? (lang === 'zh' ? '變更中...' : 'Changing...') : (lang === 'zh' ? '變更密碼' : 'Change Password')}
                         </button>
                     </div>
                 </div>

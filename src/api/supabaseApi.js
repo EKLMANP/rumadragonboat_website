@@ -2,6 +2,7 @@
 // Supabase API - 取代 Google Apps Script
 
 import { supabase } from '../lib/supabase';
+import { tr } from '../utils/i18n';
 
 // =====================================================
 // 工具函數
@@ -944,7 +945,7 @@ export const fetchTrainingRecords = async () => {
 const addTrainingRecord = async (params) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '尚未登入' };
+        if (!user) return { success: false, message: tr('尚未登入', 'Not logged in') };
 
         let fileUrl = null;
 
@@ -960,7 +961,7 @@ const addTrainingRecord = async (params) => {
 
             if (uploadError) {
                 console.error("Upload error:", uploadError);
-                return { success: false, message: '圖片上傳失敗' };
+                return { success: false, message: tr('圖片上傳失敗', 'Image upload failed') };
             }
 
             // 取得 Public URL
@@ -1055,7 +1056,7 @@ const addTrainingRecord = async (params) => {
 const updateTrainingRecord = async (params) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '尚未登入' };
+        if (!user) return { success: false, message: tr('尚未登入', 'Not logged in') };
 
         // 驗證紀錄屬於當前使用者
         const { data: existing, error: fetchErr } = await supabase
@@ -1066,7 +1067,7 @@ const updateTrainingRecord = async (params) => {
             .maybeSingle();
 
         if (fetchErr || !existing) {
-            return { success: false, message: '找不到此紀錄或無權限修改' };
+            return { success: false, message: tr('找不到此紀錄或無權限修改', 'Record not found or you do not have permission to edit it') };
         }
 
         let fileUrl = existing.file_url;
@@ -1082,7 +1083,7 @@ const updateTrainingRecord = async (params) => {
 
             if (uploadError) {
                 console.error("Upload error:", uploadError);
-                return { success: false, message: '圖片上傳失敗' };
+                return { success: false, message: tr('圖片上傳失敗', 'Image upload failed') };
             }
 
             const { data: { publicUrl } } = supabase.storage
@@ -1135,7 +1136,7 @@ const updateTrainingRecord = async (params) => {
 const deleteTrainingRecord = async (params) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '尚未登入' };
+        if (!user) return { success: false, message: tr('尚未登入', 'Not logged in') };
 
         // 驗證紀錄屬於當前使用者
         const { data: existing, error: fetchErr } = await supabase
@@ -1146,7 +1147,7 @@ const deleteTrainingRecord = async (params) => {
             .maybeSingle();
 
         if (fetchErr || !existing) {
-            return { success: false, message: '找不到此紀錄或無權限刪除' };
+            return { success: false, message: tr('找不到此紀錄或無權限刪除', 'Record not found or you do not have permission to delete it') };
         }
 
         // 1. 查找對應的 point_events 紀錄（同一天可能有多筆，只取最近一筆）
@@ -1294,13 +1295,13 @@ export const adminUpdateUserRole = async (userId, newRole) => {
 
         // 檢查回傳結果
         if (data && data.success === false) {
-            return { success: false, message: data.error || '操作失敗' };
+            return { success: false, message: data.error || tr('操作失敗', 'Operation failed') };
         }
 
         return { success: true, data };
     } catch (error) {
         console.error('Admin assign role failed:', error);
-        return { success: false, message: error.message || '操作失敗' };
+        return { success: false, message: error.message || tr('操作失敗', 'Operation failed') };
     }
 };
 
@@ -1376,7 +1377,7 @@ export const adminCreateUser = async (email, password, name, role) => {
         return { success: true, data };
     } catch (error) {
         console.error('Admin create user failed:', error);
-        return { success: false, message: error.message || '建立帳號失敗' };
+        return { success: false, message: error.message || tr('建立帳號失敗', 'Failed to create account') };
     }
 };
 
@@ -1538,7 +1539,7 @@ export const fetchSeatingArrangements = async (dates) => {
 export const submitBugReport = async ({ description, screenshotFile }) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '請先登入' };
+        if (!user) return { success: false, message: tr('請先登入', 'Please log in first') };
 
         // 1. 上傳截圖 (如果有的話)
         let screenshotUrl = null;
@@ -1924,7 +1925,7 @@ export const fetchPointEvents = async () => {
 export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) => {
     try {
         if (!memberNames || memberNames.length === 0) {
-            return { success: false, message: '請選擇至少一位隊員' };
+            return { success: false, message: tr('請選擇至少一位隊員', 'Please select at least one member') };
         }
 
         // 取得 TRAINING_FITNESS 規則
@@ -1936,7 +1937,7 @@ export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) 
 
         if (ruleError || !rule) {
             console.error('Cannot find TRAINING_FITNESS rule:', ruleError);
-            return { success: false, message: '找不到體能課積點規則' };
+            return { success: false, message: tr('找不到體能課積點規則', 'Fitness class point rule not found') };
         }
 
         const pointsToAward = rule.base_points; // 1 point
@@ -1949,7 +1950,7 @@ export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) 
 
         if (memberError) {
             console.error('Error fetching members:', memberError);
-            return { success: false, message: '查詢隊員資料失敗' };
+            return { success: false, message: tr('查詢隊員資料失敗', 'Failed to look up member data') };
         }
 
         // 更新 members 表的 total_points
@@ -2029,7 +2030,7 @@ export const awardFitnessAttendance = async (date, memberNames, awardedByEmail) 
 
         return {
             success: true,
-            message: `已為 ${successCount} 位隊員加上 ${pointsToAward} M 點`,
+            message: tr(`已為 ${successCount} 位隊員加上 ${pointsToAward} M 點`, `Added ${pointsToAward} M points to ${successCount} member(s)`),
             successCount,
             errors
         };
@@ -2078,7 +2079,7 @@ export const fetchFitnessHistory = async (date = null) => {
 export const addReward = async (params) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '請先登入' };
+        if (!user) return { success: false, message: tr('請先登入', 'Please log in first') };
 
         let imageUrl = null;
 
@@ -2104,7 +2105,7 @@ export const addReward = async (params) => {
 
             if (uploadError) {
                 console.error("Upload reward image error:", uploadError);
-                return { success: false, message: '圖片上傳失敗' };
+                return { success: false, message: tr('圖片上傳失敗', 'Image upload failed') };
             }
 
             const { data: { publicUrl } } = supabase.storage
@@ -2193,7 +2194,7 @@ export const updateReward = async (params) => {
 
             if (uploadError) {
                 console.error("Upload reward image error:", uploadError);
-                return { success: false, message: '圖片上傳失敗' };
+                return { success: false, message: tr('圖片上傳失敗', 'Image upload failed') };
             }
 
             const { data: { publicUrl } } = supabase.storage
@@ -2262,7 +2263,7 @@ export const fetchRewards = async ({ includeArchived = false } = {}) => {
 export const redeemReward = async (rewardId) => {
     try {
         const user = await getCachedUser();
-        if (!user) return { success: false, message: '請先登入' };
+        if (!user) return { success: false, message: tr('請先登入', 'Please log in first') };
 
         // 取得商品資訊
         const { data: reward, error: rewardError } = await supabase
@@ -2272,12 +2273,12 @@ export const redeemReward = async (rewardId) => {
             .single();
 
         if (rewardError || !reward) {
-            return { success: false, message: '找不到此商品' };
+            return { success: false, message: tr('找不到此商品', 'Item not found') };
         }
 
         // 檢查庫存
         if (reward.stock <= 0) {
-            return { success: false, message: '此商品已兌換完畢' };
+            return { success: false, message: tr('此商品已兌換完畢', 'This item is out of stock') };
         }
 
         // 檢查用戶點數
@@ -2290,7 +2291,7 @@ export const redeemReward = async (rewardId) => {
         const currentPoints = member?.total_points || 0;
         const cost = reward.u_coins_price;
         if (currentPoints < cost) {
-            return { success: false, message: `M點不足（需 ${cost}，目前 ${currentPoints}）` };
+            return { success: false, message: tr(`M點不足（需 ${cost}，目前 ${currentPoints}）`, `Not enough M points (need ${cost}, you have ${currentPoints})`) };
         }
 
         // 建立兌換紀錄
@@ -2337,7 +2338,7 @@ export const redeemReward = async (rewardId) => {
             description: `兌換商品: ${reward.name}`
         });
 
-        return { success: true, message: `成功兌換「${reward.name}」！` };
+        return { success: true, message: tr(`成功兌換「${reward.name}」！`, `Successfully redeemed "${reward.name}"!`) };
     } catch (error) {
         console.error('Error redeeming reward:', error);
         return { success: false, message: error.message };
