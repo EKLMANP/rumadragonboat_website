@@ -181,10 +181,10 @@ export default function AnnouncementsNewsPage() {
                 </div>
 
                 {/* 主要區域 - 風雲榜優先 */}
-                <div className="grid lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     {/* 本月風雲榜 - 佔據 3/5 寬度 */}
-                    <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg p-8 bg-gradient-to-b from-white via-amber-50/30 to-white">
-                        <h2 className="text-xl font-bold text-gray-800 mb-14 flex items-center gap-3 justify-center">
+                    <div className="lg:col-span-3 min-w-0 bg-white rounded-2xl shadow-lg p-4 sm:p-8 bg-gradient-to-b from-white via-amber-50/30 to-white">
+                        <h2 className="text-xl font-bold text-gray-800 mb-10 sm:mb-14 flex flex-wrap items-center gap-x-3 gap-y-1 justify-center">
                             <Trophy className="text-yellow-500" size={28} />
                             {lang === 'zh' ? '本月風雲榜' : 'Monthly Leaderboard'}
                             <span className="text-sm font-normal text-gray-400 ml-2">
@@ -204,7 +204,7 @@ export default function AnnouncementsNewsPage() {
                         ) : (
                             <>
                                 {/* Podium - 凸台形式 */}
-                                <div className="flex justify-center items-end gap-4 mb-10 h-64 px-4">
+                                <div className="flex justify-center items-end gap-2 sm:gap-4 mb-10 h-64 px-0 sm:px-4">
                                     {/* Rank 2 - 銀牌 */}
                                     {leaderboard[1] && (
                                         <div className="flex flex-col items-center animate-fade-in">
@@ -275,9 +275,9 @@ export default function AnnouncementsNewsPage() {
 
                                 {/* Rank 4-5 */}
                                 {leaderboard.length > 3 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 px-2 sm:px-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 px-0 sm:px-8">
                                         {leaderboard.slice(3).map((item, index) => (
-                                            <div key={item.name} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                                            <div key={item.name} className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
                                                 <span className="text-lg font-bold text-gray-400 w-8">{index + 4}</span>
                                                 <Avatar name={item.name} avatar={item.avatar} size="sm" className="shadow" />
                                                 <div className="flex-1">
@@ -294,7 +294,7 @@ export default function AnnouncementsNewsPage() {
                     </div>
 
                     {/* 最新消息 - 佔據 2/5 寬度 */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6 flex flex-col max-h-[700px]">
+                    <div className="lg:col-span-2 min-w-0 bg-white rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col max-h-[700px]">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-gray-800">📢 {lang === 'zh' ? '最新消息' : 'Latest News'}</h2>
                             <select
