@@ -241,7 +241,7 @@ export default function HomePage() {
                 {/* Left: Black Content */}
                 <div className="bg-[#0a0a0a] flex flex-col justify-center p-10 md:p-16 lg:p-20 order-2 md:order-1 relative z-10 border-t border-gray-900 md:border-none">
                     <h2 className="font-display text-4xl md:text-5xl font-bold uppercase text-white mb-12">
-                        {t('why_title_1')} <span className="text-red-600">{t('why_title_2')}</span>？
+                        {t('why_title_1')} <span className="text-red-600">{t('why_title_2')}</span>{lang === 'zh' ? '？' : '?'}
                     </h2>
 
                     {/* Vertical Feature List */}

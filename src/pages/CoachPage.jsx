@@ -19,6 +19,7 @@ import NewsManager from '../components/NewsManager';
 
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { formatYearLabel, formatMonthLabel } from '../utils/i18n';
 
 const CoachPage = () => {
   const { userProfile, user, isManagement, isAdmin } = useAuth(); // Auth Context
@@ -79,8 +80,8 @@ const CoachPage = () => {
   const handleCreateReward = async () => {
     if (!newReward.name || !newReward.points_cost) {
       Swal.fire({
-        title: '欄位未填',
-        text: '請填寫項目名稱與點數',
+        title: lang === 'zh' ? '欄位未填' : 'Missing fields',
+        text: lang === 'zh' ? '請填寫項目名稱與點數' : 'Please enter the item name and points.',
         icon: 'warning'
       });
       return;
@@ -100,7 +101,7 @@ const CoachPage = () => {
         processedFile = await compressImage(processedFile);
       } catch (e) {
         console.error("Compression failed:", e);
-        Swal.fire('圖片處理失敗', '無法壓縮圖片，請上傳較小的檔案', 'error');
+        Swal.fire(lang === 'zh' ? '圖片處理失敗' : 'Image processing failed', lang === 'zh' ? '無法壓縮圖片，請上傳較小的檔案' : 'Could not compress the image. Please upload a smaller file.', 'error');
         setLoading(false);
         return;
       }
@@ -339,6 +340,19 @@ const CoachPage = () => {
   const [fitnessHistory, setFitnessHistory] = useState([]);
   const [fitnessSubmitting, setFitnessSubmitting] = useState(false);
 
+  // 公告分類：DB 存中文值，英文模式僅在顯示時轉換
+  const announcementCategoryLabel = (cat) => {
+    if (lang === 'zh') return cat;
+    const map = { '活動': 'Activity', '比賽': 'Race', '裝勤': 'Equipment', '榮譽': 'Honor', '其他': 'Other' };
+    return map[cat] || cat;
+  };
+
+  // 地點：DB 存「中文 English」混合值（如「碧潭 Bitan」），英文模式僅顯示英文部分
+  const locationLabel = (loc) => {
+    if (lang === 'zh' || !loc) return loc;
+    return String(loc).replace(/^[\u4e00-\u9fff]+\s+(?=\S)/, '');
+  };
+
   const placeOptions = [
     "碧潭 Bitan",
     "百齡橋 Bailing Bridge",
@@ -395,7 +409,7 @@ const CoachPage = () => {
     if (res.success) {
       Swal.fire({
         icon: 'success',
-        title: '狀態已更新',
+        title: lang === 'zh' ? '狀態已更新' : 'Status updated',
         toast: true,
         position: 'top-end',
         showConfirmButton: false,
@@ -403,7 +417,7 @@ const CoachPage = () => {
       });
       loadRedemptionRecords();
     } else {
-      Swal.fire('更新失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '更新失敗' : 'Update Failed', res.message, 'error');
     }
   };
 
@@ -621,7 +635,7 @@ const CoachPage = () => {
   const handleCreateActivity = async () => {
     // Validation
     if (!newActivity.name || !newActivity.date || !newActivity.type) {
-      Swal.fire('欄位未填', '請填寫活動名稱、類型與日期', 'warning');
+      Swal.fire(lang === 'zh' ? '欄位未填' : 'Missing fields', lang === 'zh' ? '請填寫活動名稱、類型與日期' : 'Please enter the activity name, type and date.', 'warning');
       return;
     }
 
@@ -636,19 +650,19 @@ const CoachPage = () => {
 
     // Confirmation
     const result = await Swal.fire({
-      title: '確定建立活動?',
+      title: lang === 'zh' ? '確定建立活動?' : 'Create this activity?',
       html: `
             <div class="text-left">
-                <p><strong>名稱:</strong> ${newActivity.name}</p>
-                <p><strong>類型:</strong> ${newActivity.type}</p>
-                <p><strong>日期:</strong> ${newActivity.date}</p>
-                <p><strong>地點:</strong> ${finalLocation}</p>
+                <p><strong>${lang === 'zh' ? '名稱' : 'Name'}:</strong> ${newActivity.name}</p>
+                <p><strong>${lang === 'zh' ? '類型' : 'Type'}:</strong> ${newActivity.type}</p>
+                <p><strong>${lang === 'zh' ? '日期' : 'Date'}:</strong> ${newActivity.date}</p>
+                <p><strong>${lang === 'zh' ? '地點' : 'Location'}:</strong> ${finalLocation}</p>
             </div>
         `,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: '建立',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '建立' : 'Create',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
 
     if (result.isConfirmed) {
@@ -690,11 +704,11 @@ const CoachPage = () => {
         setNewActivity(prev => ({ ...prev, name: '', date: '', deadline: '', customLocation: '' })); // Reset non-defaults
         console.timeEnd('ActivityCreation');
         setLoading(false);
-        Swal.fire('成功', '活動已建立', 'success');
+        Swal.fire(lang === 'zh' ? '成功' : 'Success', lang === 'zh' ? '活動已建立' : 'Activity created', 'success');
       } else {
         console.timeEnd('ActivityCreation');
         setLoading(false);
-        Swal.fire('失敗', res.message || '建立失敗', 'error');
+        Swal.fire(lang === 'zh' ? '失敗' : 'Failed', res.message || (lang === 'zh' ? '建立失敗' : 'Failed to create'), 'error');
       }
     }
   };
@@ -702,13 +716,13 @@ const CoachPage = () => {
 
   const handleDeleteActivity = async (id, name) => {
     const result = await Swal.fire({
-      title: '刪除活動?',
-      text: `確定要刪除 ${name} 嗎？這將會刪除所有相關報名紀錄。`,
+      title: lang === 'zh' ? '刪除活動?' : 'Delete activity?',
+      text: lang === 'zh' ? `確定要刪除 ${name} 嗎？這將會刪除所有相關報名紀錄。` : `Delete ${name}? All related registrations will be deleted as well.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
 
     if (result.isConfirmed) {
@@ -716,9 +730,9 @@ const CoachPage = () => {
       const res = await postData('deleteActivity', { id });
       if (res.success) {
         setActivities(prev => prev.filter(a => a.id !== id));
-        Swal.fire('已刪除', '', 'success');
+        Swal.fire(lang === 'zh' ? '已刪除' : 'Deleted', '', 'success');
       } else {
-        Swal.fire('刪除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete Failed', res.message, 'error');
       }
       setLoading(false);
     }
@@ -726,13 +740,13 @@ const CoachPage = () => {
 
   const handleClearPast = async () => {
     const result = await Swal.fire({
-      title: '確定要清除過期資料嗎?',
-      text: "這將會刪除今天以前的所有日期與報名紀錄",
+      title: lang === 'zh' ? '確定要清除過期資料嗎?' : 'Clear expired data?',
+      text: lang === 'zh' ? "這將會刪除今天以前的所有日期與報名紀錄" : 'This will delete all dates and registration records before today.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      confirmButtonText: '確認清除',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '確認清除' : 'Yes, clear',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
     if (result.isConfirmed) {
       setLoading(true);
@@ -748,16 +762,16 @@ const CoachPage = () => {
 
       setLoading(false);
       if (res.success) {
-        Swal.fire('清除成功', '過期資料已移除', 'success');
+        Swal.fire(lang === 'zh' ? '清除成功' : 'Cleared', lang === 'zh' ? '過期資料已移除' : 'Expired data removed', 'success');
       } else {
-        Swal.fire('清除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '清除失敗' : 'Clear Failed', res.message, 'error');
       }
     }
   };
 
   const handleCreateAnnouncement = async () => {
     if (!newAnnouncement.title || !newAnnouncement.content || !newAnnouncement.date) {
-      Swal.fire('欄位未填', '請填寫標題、內容與日期', 'warning');
+      Swal.fire(lang === 'zh' ? '欄位未填' : 'Missing fields', lang === 'zh' ? '請填寫標題、內容與日期' : 'Please enter the title, content and date.', 'warning');
       return;
     }
 
@@ -773,21 +787,21 @@ const CoachPage = () => {
         category: '活動',
         pinned: false
       });
-      Swal.fire('發布成功', '', 'success');
+      Swal.fire(lang === 'zh' ? '發布成功' : 'Published', '', 'success');
     } else {
-      Swal.fire('發布失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '發布失敗' : 'Publish Failed', res.message, 'error');
     }
     setLoading(false);
   };
 
   const handleDeleteAnnouncement = async (id) => {
     const result = await Swal.fire({
-      title: '刪除公告?',
-      text: '確定要刪除此公告嗎？',
+      title: lang === 'zh' ? '刪除公告?' : 'Delete announcement?',
+      text: lang === 'zh' ? '確定要刪除此公告嗎？' : 'Are you sure you want to delete this announcement?',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      confirmButtonText: '刪除'
+      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete'
     });
 
     if (result.isConfirmed) {
@@ -795,9 +809,9 @@ const CoachPage = () => {
       const res = await postData('deleteAnnouncement', { id });
       if (res.success) {
         setAnnouncements(prev => prev.filter(a => a.id !== id));
-        Swal.fire('已刪除', '', 'success');
+        Swal.fire(lang === 'zh' ? '已刪除' : 'Deleted', '', 'success');
       } else {
-        Swal.fire('刪除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete Failed', res.message, 'error');
       }
       setLoading(false);
     }
@@ -816,22 +830,22 @@ const CoachPage = () => {
       const updated = await fetchAnnouncements();
       setAnnouncements(updated || []);
       setEditingAnnouncement(null);
-      Swal.fire('更新成功', '', 'success');
+      Swal.fire(lang === 'zh' ? '更新成功' : 'Updated', '', 'success');
     } else {
-      Swal.fire('更新失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '更新失敗' : 'Update Failed', res.message, 'error');
     }
     setLoading(false);
   };
 
   const handleDeleteDbDate = async (dateStr) => {
     const result = await Swal.fire({
-      title: '刪除此日期?',
-      text: `確定要取消 ${dateStr} 的練習嗎？`,
+      title: lang === 'zh' ? '刪除此日期?' : 'Delete this date?',
+      text: lang === 'zh' ? `確定要取消 ${dateStr} 的練習嗎？` : `Cancel the practice on ${dateStr}?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
     if (result.isConfirmed) {
       setLoading(true);
@@ -840,7 +854,7 @@ const CoachPage = () => {
       if (res.success) {
         setDbDates(prev => prev.filter(d => d.date !== dateStr));
         setLoading(false);
-        Swal.fire('已刪除', '', 'success');
+        Swal.fire(lang === 'zh' ? '已刪除' : 'Deleted', '', 'success');
       } else {
         setLoading(false);
       }
@@ -849,14 +863,14 @@ const CoachPage = () => {
 
   const handleGenerateSeating = async () => {
     if (backgroundLoading) {
-      Swal.fire('資料同步中', '請稍候 2-3 秒等待隊員資料同步...', 'info');
+      Swal.fire(lang === 'zh' ? '資料同步中' : 'Syncing data', lang === 'zh' ? '請稍候 2-3 秒等待隊員資料同步...' : 'Please wait 2-3 seconds for member data to sync...', 'info');
       return;
     }
 
     // Registrations/members loaded at page-mount can go stale if someone signs up
     // after the coach opened this page — always pull the latest before generating,
     // the same way the practice page's live seating fetch does.
-    Swal.fire({ title: '同步最新報名資料...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    Swal.fire({ title: lang === 'zh' ? '同步最新報名資料...' : 'Syncing latest registrations...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
     const [freshRegs, freshAdminUsersRes, freshMembers] = await Promise.all([
       fetchActivityRegistrations().catch(() => null),
@@ -942,7 +956,7 @@ const CoachPage = () => {
     });
 
     if (!hasAnyRegistrations) {
-      Swal.fire('還沒有隊友報名喔!', '目前沒有任何報名資料', 'info');
+      Swal.fire(lang === 'zh' ? '還沒有隊友報名喔!' : 'No sign-ups yet!', lang === 'zh' ? '目前沒有任何報名資料' : 'There are no registrations at the moment.', 'info');
       return;
     }
 
@@ -950,8 +964,8 @@ const CoachPage = () => {
 
     Swal.fire({
       icon: 'success',
-      title: '槳位已生成',
-      text: '座位表已自動同步至前台',
+      title: lang === 'zh' ? '槳位已生成' : 'Seating generated',
+      text: lang === 'zh' ? '座位表已自動同步至前台' : 'The seating chart has been synced to the member view.',
       timer: 1500,
       showConfirmButton: false
     });
@@ -1036,7 +1050,7 @@ const CoachPage = () => {
   // --- 點名邏輯 ---
   const openRollCall = (specificDate = null) => {
     if (backgroundLoading) {
-      Swal.fire('資料同步中', '請稍候，正在下載最新報名名單...', 'info');
+      Swal.fire(lang === 'zh' ? '資料同步中' : 'Syncing data', lang === 'zh' ? '請稍候，正在下載最新報名名單...' : 'Please wait, downloading the latest registration list...', 'info');
       return;
     }
 
@@ -1045,7 +1059,7 @@ const CoachPage = () => {
       if (dbDates.length > 0) {
         target = dbDates[0].date;
       } else {
-        Swal.fire('無日期', '目前沒有任何已開放的練習日期', 'warning');
+        Swal.fire(lang === 'zh' ? '無日期' : 'No dates', lang === 'zh' ? '目前沒有任何已開放的練習日期' : 'There are no open practice dates at the moment.', 'warning');
         return;
       }
     }
@@ -1126,8 +1140,8 @@ const CoachPage = () => {
       // 4. 顯示成功訊息 (設定 timer 自動關閉，且隱藏確認按鈕，讓流程更順)
       Swal.fire({
         icon: 'success',
-        title: '點名完成!',
-        text: `已儲存 ${rollCallDate} 的紀錄`,
+        title: lang === 'zh' ? '點名完成!' : 'Roll call complete!',
+        text: lang === 'zh' ? `已儲存 ${rollCallDate} 的紀錄` : `Saved the record for ${rollCallDate}`,
         timer: 1500,
         showConfirmButton: false
       });
@@ -1138,11 +1152,11 @@ const CoachPage = () => {
 
       // 6. 出席已存，但 M 點沒加成功 → 明確提醒（避免再次靜默失敗）
       if (result.pointsError) {
-        Swal.fire('出席已儲存，但 M 點未加成功', result.pointsError, 'warning');
+        Swal.fire(lang === 'zh' ? '出席已儲存，但 M 點未加成功' : 'Attendance saved, but M points were not awarded', result.pointsError, 'warning');
       }
 
     } else {
-      Swal.fire('失敗', '儲存點名失敗', 'error');
+      Swal.fire(lang === 'zh' ? '失敗' : 'Failed', lang === 'zh' ? '儲存點名失敗' : 'Failed to save roll call', 'error');
     }
   };
 
@@ -1357,7 +1371,7 @@ const CoachPage = () => {
                             value={newActivity.end_time}
                             onChange={(e) => setNewActivity({ ...newActivity, end_time: e.target.value })}
                           >
-                            <option value="Pending" className="text-gray-900 bg-white">待定</option>
+                            <option value="Pending" className="text-gray-900 bg-white">{lang === 'zh' ? '待定' : 'TBD'}</option>
                             {generateTimeOptions().map(t => <option key={t} value={t} className="text-gray-900 bg-white">{t}</option>)}
                           </select>
                         </div>
@@ -1423,7 +1437,7 @@ const CoachPage = () => {
                                   </div>
                                   <div className="flex flex-col gap-0.5 text-xs text-gray-500">
                                     <span className="flex items-center gap-1"><Calendar size={10} /> {activity.date}</span>
-                                    <span className="flex items-center gap-1"><MapPin size={10} /> {activity.location}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={10} /> {locationLabel(activity.location)}</span>
                                   </div>
                                 </div>
                                 <button
@@ -1488,7 +1502,7 @@ const CoachPage = () => {
 
                 <div className="overflow-x-auto min-h-[300px] flex flex-col gap-4">
                   <div>
-                    <p className="text-xs text-gray-400 mb-2 md:hidden">👈 左右滑動查看更多</p>
+                    <p className="text-xs text-gray-400 mb-2 md:hidden">{lang === 'zh' ? '👈 左右滑動查看更多' : '👈 Swipe left/right for more'}</p>
                     <table className="w-full text-left min-w-[600px]">
                       <thead>
                         <tr className="bg-gray-50 text-gray-600 text-xs sm:text-sm">
@@ -1520,7 +1534,7 @@ const CoachPage = () => {
                                 <td className="p-3 font-bold text-gray-800">
                                   {activity.name}
                                   <div className="text-xs text-gray-400 font-normal mt-0.5 flex items-center gap-1">
-                                    <MapPin size={10} /> {activity.location}
+                                    <MapPin size={10} /> {locationLabel(activity.location)}
                                   </div>
                                 </td>
                                 <td className="p-3 text-gray-600 font-mono">{activity.date}</td>
@@ -1559,7 +1573,7 @@ const CoachPage = () => {
                                         html: `
                                             <div class="text-left">
                                               <p class="mb-2 text-sm text-gray-500">
-                                                📅 ${activity.date} | 📍 ${activity.location}
+                                                📅 ${activity.date} | 📍 ${locationLabel(activity.location)}
                                               </p>
                                               <div class="bg-gray-50 rounded-lg p-2 max-h-[300px] overflow-y-auto border border-gray-200">
                                                 ${registrationList.length > 0 ? `
@@ -1567,7 +1581,7 @@ const CoachPage = () => {
                                                     <thead class="bg-gray-100 text-gray-600 sticky top-0">
                                                       <tr>
                                                         <th class="p-2 text-left">#</th>
-                                                        <th class="p-2 text-left">姓名</th>
+                                                        <th class="p-2 text-left">${lang === 'zh' ? '姓名' : 'Name'}</th>
                                                         <th class="p-2 text-left">Email</th>
                                                       </tr>
                                                     </thead>
@@ -1581,10 +1595,10 @@ const CoachPage = () => {
                                                       `).join('')}
                                                     </tbody>
                                                   </table>
-                                                ` : '<p class="text-center text-gray-400 py-4">目前無人報名</p>'}
+                                                ` : `<p class="text-center text-gray-400 py-4">${lang === 'zh' ? '目前無人報名' : 'No registrations yet'}</p>`}
                                               </div>
                                               <div class="mt-4 text-right text-xs text-gray-400">
-                                                共 ${registrationList.length} 人報名
+                                                ${lang === 'zh' ? `共 ${registrationList.length} 人報名` : `${registrationList.length} registered`}
                                               </div>
                                             </div>
                                           `,
@@ -1740,7 +1754,7 @@ const CoachPage = () => {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 {item.pinned && <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded font-bold">{lang === 'zh' ? '置頂' : 'Pinned'}</span>}
-                                <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-bold">{item.category}</span>
+                                <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-bold">{announcementCategoryLabel(item.category)}</span>
                                 <span className="text-xs text-gray-400">{item.date}</span>
                               </div>
                               <h4 className="font-bold text-gray-800">{item.title}</h4>
@@ -2024,7 +2038,7 @@ const CoachPage = () => {
                             .slice((listPage - 1) * 5, listPage * 5)
                             .map(record => (
                               <tr key={record.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
-                                <td className="py-3 px-4 text-sm text-gray-500">{new Date(record.redeemed_at).toLocaleDateString()} {new Date(record.redeemed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                <td className="py-3 px-4 text-sm text-gray-500">{new Date(record.redeemed_at).toLocaleDateString(lang === 'zh' ? undefined : 'en-US')} {new Date(record.redeemed_at).toLocaleTimeString(lang === 'zh' ? [] : 'en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                                 <td className="py-3 px-4 font-bold text-gray-700">{record.user_name}</td>
                                 <td className="py-3 px-4 text-gray-800">{record.product_name}</td>
                                 <td className="py-3 px-4 text-gray-600 font-medium">1</td>
@@ -2083,7 +2097,7 @@ const CoachPage = () => {
                 {/* 顯示背景同步提示 */}
                 {backgroundLoading && (
                   <div className="mb-4 bg-blue-50 text-blue-700 p-3 rounded-lg flex items-center gap-2 text-sm border border-blue-100">
-                    <Loader2 className="animate-spin" size={16} /> 正在同步最新隊員資料與報名紀錄，請稍候...
+                    <Loader2 className="animate-spin" size={16} /> {lang === 'zh' ? '正在同步最新隊員資料與報名紀錄，請稍候...' : 'Syncing the latest member data and registrations, please wait...'}
                   </div>
                 )}
 
@@ -2135,7 +2149,7 @@ const CoachPage = () => {
                       const activityIdKey = selectedSeatingDate;
                       const boatData = seatingCharts[activityIdKey];
                       const targetInfo = seatingActivities.find(d => d.activityId === activityIdKey);
-                      const placeInfo = targetInfo ? targetInfo.place : '';
+                      const placeInfo = targetInfo ? locationLabel(targetInfo.place) : '';
                       const timeInfo = targetInfo ? targetInfo.time : '';
                       const displayDate = targetInfo ? targetInfo.date : '';
 
@@ -2224,7 +2238,7 @@ const CoachPage = () => {
               <div className="space-y-8 animate-fade-in-down">
                 {backgroundLoading && (
                   <div className="mb-4 bg-blue-50 text-blue-700 p-3 rounded-lg flex items-center gap-2 text-sm border border-blue-100">
-                    <Loader2 className="animate-spin" size={16} /> 正在同步報名名單，請稍候...
+                    <Loader2 className="animate-spin" size={16} /> {lang === 'zh' ? '正在同步報名名單，請稍候...' : 'Syncing registrations, please wait...'}
                   </div>
                 )}
 
@@ -2339,7 +2353,7 @@ const CoachPage = () => {
 
                                   <div className="flex flex-col gap-1 text-sm text-gray-600">
                                     <span className="flex items-center gap-1"><Clock size={14} /> {item.time}</span>
-                                    <span className="flex items-center gap-1"><MapPin size={14} /> {item.place.split(' ')[0]}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={14} /> {lang === 'zh' ? item.place.split(' ')[0] : locationLabel(item.place)}</span>
                                   </div>
 
                                   <button className={`mt-2 w-full py-2 font-bold rounded-lg transition
@@ -2589,10 +2603,10 @@ const CoachPage = () => {
                           const history = await fetchFitnessHistory(fitnessDate);
                           setFitnessHistory(history);
                         } else {
-                          Swal.fire('失敗', result.message || '點名失敗', 'error');
+                          Swal.fire(lang === 'zh' ? '失敗' : 'Failed', result.message || (lang === 'zh' ? '點名失敗' : 'Roll call failed'), 'error');
                         }
                       } catch (err) {
-                        Swal.fire('錯誤', err.message, 'error');
+                        Swal.fire(lang === 'zh' ? '錯誤' : 'Error', err.message, 'error');
                       } finally {
                         setFitnessSubmitting(false);
                       }
@@ -2639,7 +2653,7 @@ const CoachPage = () => {
               <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-yellow-100 animate-fade-in-down">
                 {backgroundLoading && (
                   <div className="mb-4 bg-yellow-50 text-yellow-700 p-3 rounded-lg flex items-center gap-2 text-sm border border-yellow-100">
-                    <Loader2 className="animate-spin" size={16} /> 正在統計最新數據...
+                    <Loader2 className="animate-spin" size={16} /> {lang === 'zh' ? '正在統計最新數據...' : 'Calculating the latest stats...'}
                   </div>
                 )}
 
@@ -2651,7 +2665,7 @@ const CoachPage = () => {
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-gray-800">{lang === 'zh' ? '出席率排行榜' : 'Attendance Leaderboard'}</h3>
-                      <p className="text-xs text-gray-500">Total Sessions: <span className="font-bold text-blue-600 text-sm">{totalSessionsInPeriod}</span> {lang === 'zh' ? '次練習' : 'Sessions'}</p>
+                      <p className="text-xs text-gray-500">Total Sessions: <span className="font-bold text-blue-600 text-sm">{totalSessionsInPeriod}</span>{lang === 'zh' ? ' 次練習' : ''}</p>
                     </div>
                   </div>
 
@@ -2671,7 +2685,7 @@ const CoachPage = () => {
                           className="pl-2 pr-6 py-1.5 bg-white border border-gray-300 rounded text-sm font-bold outline-none focus:ring-2 focus:ring-blue-300 text-gray-800"
                         >
                           {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => (
-                            <option key={y} value={y} className="text-gray-900 bg-white">{y} {lang === 'zh' ? '年' : 'Year'}</option>
+                            <option key={y} value={y} className="text-gray-900 bg-white">{formatYearLabel(y, lang)}</option>
                           ))}
                         </select>
                       )}
@@ -2682,7 +2696,7 @@ const CoachPage = () => {
                           className="pl-2 pr-6 py-1.5 bg-white border border-gray-300 rounded text-sm font-bold outline-none focus:ring-2 focus:ring-blue-300 text-gray-800"
                         >
                           {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                            <option key={m} value={m} className="text-gray-900 bg-white">{m} {lang === 'zh' ? '月' : 'Month'}</option>
+                            <option key={m} value={m} className="text-gray-900 bg-white">{formatMonthLabel(m, lang)}</option>
                           ))}
                         </select>
                       )}
@@ -2717,7 +2731,7 @@ const CoachPage = () => {
                         <div className="flex-1">
                           <div className="flex justify-between items-end mb-1">
                             <span className="font-bold text-gray-700">{stat.name}</span>
-                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 rounded">{stat.count} 次</span>
+                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 rounded">{stat.count} {lang === 'zh' ? '次' : (stat.count === 1 ? 'session' : 'sessions')}</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                             <div
@@ -2727,7 +2741,7 @@ const CoachPage = () => {
                               style={{ width: `${stat.rate}%` }}
                             ></div>
                           </div>
-                          <p className="text-[10px] text-gray-400 text-right mt-0.5">{stat.rate}% 出席率</p>
+                          <p className="text-[10px] text-gray-400 text-right mt-0.5">{stat.rate}% {lang === 'zh' ? '出席率' : 'attendance'}</p>
                         </div>
                       </div>
                     </div>
@@ -2736,7 +2750,7 @@ const CoachPage = () => {
                   {leaderboardData.length === 0 && (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-300 border-2 border-dashed border-gray-200 rounded-xl">
                       <BarChart3 size={48} className="mb-2 opacity-20" />
-                      <p>該區間尚無點名紀錄</p>
+                      <p>{lang === 'zh' ? '該區間尚無點名紀錄' : 'No roll call records for this period'}</p>
                     </div>
                   )}
                 </div>
@@ -2836,12 +2850,12 @@ const CoachPage = () => {
                       })}
                   </div>
                   {registrations.filter(r => r.practicedates === rollCallDate).length === 0 && (
-                    <div className="col-span-2 text-center text-gray-400 py-4 bg-white rounded border border-dashed">此日期無人報名</div>
+                    <div className="col-span-2 text-center text-gray-400 py-4 bg-white rounded border border-dashed">{lang === 'zh' ? '此日期無人報名' : 'No registrations for this date'}</div>
                   )}
                 </div>
 
                 <div className="border-t pt-4">
-                  <p className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-1"><Plus size={14} /> 新增空降 (沒報名但有來)：</p>
+                  <p className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-1"><Plus size={14} /> {lang === 'zh' ? '新增空降 (沒報名但有來)：' : 'Add walk-ins (attended without signing up):'}</p>
                   <select
                     className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-300 outline-none text-gray-800"
                     onChange={(e) => {
@@ -2851,7 +2865,7 @@ const CoachPage = () => {
                       }
                     }}
                   >
-                    <option value="">-- 選擇隊員加入 --</option>
+                    <option value="">{lang === 'zh' ? '-- 選擇隊員加入 --' : '-- Select a member to add --'}</option>
                     {allUsers
                       .filter(u => {
                         const isRegistered = registrations.some(r => r.practicedates === rollCallDate && r.name === u.Name);
@@ -2945,11 +2959,11 @@ const CoachPage = () => {
                         value={editingAnnouncement.category}
                         onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, category: e.target.value })}
                       >
-                        <option value="活動">活動</option>
-                        <option value="比賽">比賽</option>
-                        <option value="裝勤">裝勤</option>
-                        <option value="榮譽">榮譽</option>
-                        <option value="其他">其他</option>
+                        <option value="活動">{lang === 'zh' ? '活動' : 'Activity'}</option>
+                        <option value="比賽">{lang === 'zh' ? '比賽' : 'Race'}</option>
+                        <option value="裝勤">{lang === 'zh' ? '裝勤' : 'Equipment'}</option>
+                        <option value="榮譽">{lang === 'zh' ? '榮譽' : 'Honor'}</option>
+                        <option value="其他">{lang === 'zh' ? '其他' : 'Other'}</option>
                       </select>
                     </div>
                   </div>

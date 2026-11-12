@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/AppLayout';
 import { Megaphone, Crown, Search, Pin, ChevronRight, Loader2, Trophy, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatMonthLabel } from '../../utils/i18n';
 import { fetchAnnouncements, fetchAttendance, fetchAllData, fetchMemberBasicInfo, fetchMPointLeaderboard } from '../../api/supabaseApi';
 import { supabase } from '../../lib/supabase';
 
@@ -119,7 +120,8 @@ export default function AnnouncementsNewsPage() {
             '比賽': 'Race',
             '裝勤': 'Equipment',
             '榮譽': 'Honor',
-            '其他': 'Other'
+            '其他': 'Other',
+            '一般': 'General'
         };
         return map[cat] || cat;
     };
@@ -188,7 +190,7 @@ export default function AnnouncementsNewsPage() {
                             <Trophy className="text-yellow-500" size={28} />
                             {lang === 'zh' ? '本月風雲榜' : 'Monthly Leaderboard'}
                             <span className="text-sm font-normal text-gray-400 ml-2">
-                                {new Date().getMonth() + 1}{lang === 'zh' ? '月' : ' Month'}
+                                {lang === 'zh' ? `${new Date().getMonth() + 1}月` : formatMonthLabel(new Date().getMonth() + 1, lang)}
                             </span>
                         </h2>
 
@@ -352,7 +354,7 @@ export default function AnnouncementsNewsPage() {
                                                     {news.title}
                                                 </h3>
                                                 <p className="text-xs text-gray-400 mt-1">
-                                                    {new Date(news.created_at || news.date).toLocaleDateString('zh-TW')}
+                                                    {new Date(news.created_at || news.date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US')}
                                                 </p>
                                             </div>
                                             <ChevronRight className="text-gray-400 group-hover:text-sky-600 transition flex-shrink-0" size={18} />
@@ -381,7 +383,7 @@ export default function AnnouncementsNewsPage() {
                                 </div>
                                 <h2 className="text-lg sm:text-xl font-bold text-gray-800 break-words">{selectedAnnouncement.title}</h2>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    {new Date(selectedAnnouncement.created_at || selectedAnnouncement.date).toLocaleDateString('zh-TW')}
+                                    {new Date(selectedAnnouncement.created_at || selectedAnnouncement.date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US')}
                                 </p>
                             </div>
                             <button

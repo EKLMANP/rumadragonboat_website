@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -21,6 +22,7 @@ export default function ProtectedRoute({
     requireAuth = true
 }) {
     const { isAuthenticated, hasRoleLevel, initialized, user, userRoles, loading } = useAuth();
+    const { lang } = useLanguage();
     const location = useLocation();
     const [sessionChecked, setSessionChecked] = useState(false);
     const [hasValidSession, setHasValidSession] = useState(null);
@@ -64,7 +66,7 @@ export default function ProtectedRoute({
             <div className="min-h-screen flex items-center justify-center bg-blue-50">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">載入中...</p>
+                    <p className="text-gray-600">{lang === 'zh' ? '載入中...' : 'Loading...'}</p>
                 </div>
             </div>
         );
@@ -83,16 +85,16 @@ export default function ProtectedRoute({
             <div className="min-h-screen flex items-center justify-center bg-blue-50">
                 <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md">
                     <div className="text-6xl mb-4">🚫</div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">權限不足</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">{lang === 'zh' ? '權限不足' : 'Access Denied'}</h2>
                     <p className="text-gray-600 mb-6">
-                        您沒有存取此頁面的權限。<br />
-                        如需權限，請聯繫管理員。
+                        {lang === 'zh' ? '您沒有存取此頁面的權限。' : 'You do not have permission to access this page.'}<br />
+                        {lang === 'zh' ? '如需權限，請聯繫管理員。' : 'If you need access, please contact an administrator.'}
                     </p>
                     <button
                         onClick={() => window.history.back()}
                         className="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition"
                     >
-                        返回上一頁
+                        {lang === 'zh' ? '返回上一頁' : 'Go Back'}
                     </button>
                 </div>
             </div>

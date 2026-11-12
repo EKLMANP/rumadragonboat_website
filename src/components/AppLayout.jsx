@@ -38,7 +38,7 @@ export default function AppLayout({ children }) {
                     <button
                         onClick={toggleLanguage}
                         className="p-2 text-white hover:bg-zinc-800 rounded-lg transition-colors flex items-center gap-1"
-                        title={lang === 'zh' ? 'Switch to English' : '切換至中文'}
+                        title={lang === 'zh' ? 'Switch to English' : 'Switch to Chinese'}
                     >
                         <Globe size={20} />
                         <span className="text-xs font-bold uppercase">{lang === 'zh' ? 'EN' : '中'}</span>

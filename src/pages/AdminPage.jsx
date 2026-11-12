@@ -15,6 +15,7 @@ import AppLayout from '../components/AppLayout';
 import { useLanguage } from '../contexts/LanguageContext';
 
 // --- 選項定義 ---
+// 注意：下列中文為 DB 儲存值 / 比對 key，不可改值；英文只用在「顯示」處（見 POSITION_LABEL_EN / EQUIPMENT_LABEL_EN）
 const POSITION_OPTIONS = [
   "可以划左右槳及擔任舵手",
   "只能划右槳",
@@ -27,6 +28,27 @@ const POSITION_OPTIONS = [
 const SKILL_OPTIONS = ["1", "2", "3", "4", "5"];
 
 const EQUIPMENT_OPTIONS = ["救生衣", "木槳", "碳纖槳", "新增新裝備品項"];
+const POSITION_LABEL_EN = {
+  "可以划左右槳及擔任舵手": "Can paddle left/right and steer",
+  "只能划右槳": "Right-side paddler only",
+  "只能划左槳": "Left-side paddler only",
+  "可以划左槳及右槳": "Can paddle left and right",
+  "可以划左槳及擔任舵手": "Can paddle left and steer",
+  "可以划右槳及擔任舵手": "Can paddle right and steer"
+};
+const EQUIPMENT_LABEL_EN = {
+  "救生衣": "Life jacket",
+  "木槳": "Wooden paddle",
+  "碳纖槳": "Carbon paddle",
+  "新增新裝備品項": "Add new equipment item"
+};
+const positionLabel = (v, lang) => (lang === 'zh' ? v : (POSITION_LABEL_EN[v] || v));
+const equipmentLabel = (v, lang) => (lang === 'zh' ? v : (EQUIPMENT_LABEL_EN[v] || v));
+const roleLabel = (role, lang) => {
+  if (role === 'admin') return lang === 'zh' ? '管理員' : 'Admin';
+  if (role === 'management') return lang === 'zh' ? '幹部' : 'Officer';
+  return lang === 'zh' ? '隊員' : 'Member';
+};
 const COUNT_OPTIONS_0_15 = Array.from({ length: 16 }, (_, i) => i);
 const COUNT_OPTIONS_1_10 = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -73,7 +95,7 @@ const AdminPage = () => {
   // 處理儲存 Email 更新
   const handleSaveEmail = async (memberName) => {
     if (!editingEmailValue || !editingEmailValue.includes('@')) {
-      return Swal.fire('請輸入有效的 Email', '', 'warning');
+      return Swal.fire(lang === 'zh' ? '請輸入有效的 Email' : 'Please enter a valid email', '', 'warning');
     }
 
     setLoading(true);
@@ -84,15 +106,15 @@ const AdminPage = () => {
       });
 
       if (res.success) {
-        Swal.fire({ icon: 'success', title: 'Email 已更新', timer: 1500, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: lang === 'zh' ? 'Email 已更新' : 'Email updated', timer: 1500, showConfirmButton: false });
         setEditingEmailId(null);
         setEditingEmailValue('');
         await loadData();
       } else {
-        Swal.fire('更新失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '更新失敗' : 'Update failed', res.message, 'error');
       }
     } catch (e) {
-      Swal.fire('更新失敗', e.message, 'error');
+      Swal.fire(lang === 'zh' ? '更新失敗' : 'Update failed', e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -110,9 +132,9 @@ const AdminPage = () => {
     const res = await updateBugReportStatus(bugId, !currentStatus);
     if (res.success) {
       await loadBugReports();
-      Swal.fire('已更新狀態', '', 'success');
+      Swal.fire(lang === 'zh' ? '已更新狀態' : 'Status updated', '', 'success');
     } else {
-      Swal.fire('更新失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '更新失敗' : 'Update failed', res.message, 'error');
     }
     setLoading(false);
   };
@@ -209,29 +231,29 @@ const AdminPage = () => {
 
   const handleCreateAuth = async () => {
     if (!authForm.email || !authForm.name) {
-      return Swal.fire('請填寫完整資訊', '', 'warning');
+      return Swal.fire(lang === 'zh' ? '請填寫完整資訊' : 'Please fill in all fields', '', 'warning');
     }
     setLoading(true);
     const res = await adminCreateUser(authForm.email, '000000', authForm.name, authForm.role);
     setLoading(false);
     if (res.success) {
-      Swal.fire({ icon: 'success', title: '使用者已建立', text: '預設密碼: 000000', timer: 2000 });
+      Swal.fire({ icon: 'success', title: lang === 'zh' ? '使用者已建立' : 'User created', text: lang === 'zh' ? '預設密碼: 000000' : 'Default password: 000000', timer: 2000 });
       setAuthForm({ email: '', name: '', role: 'member' });
       loadAuthUsers();
     } else {
-      Swal.fire('建立失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '建立失敗' : 'Creation failed', res.message, 'error');
     }
   };
 
   const handleDeleteAuth = async (userId) => {
     const confirm = await Swal.fire({
-      title: '確定刪除此使用者?',
-      text: '此操作將無法復原',
+      title: lang === 'zh' ? '確定刪除此使用者?' : 'Delete this user?',
+      text: lang === 'zh' ? '此操作將無法復原' : 'This action cannot be undone',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
 
     if (confirm.isConfirmed) {
@@ -239,10 +261,10 @@ const AdminPage = () => {
       const res = await adminDeleteUser(userId);
       setLoading(false);
       if (res.success) {
-        Swal.fire('已刪除', '', 'success');
+        Swal.fire(lang === 'zh' ? '已刪除' : 'Deleted', '', 'success');
         loadAuthUsers();
       } else {
-        Swal.fire('刪除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete failed', res.message, 'error');
       }
     }
   };
@@ -253,9 +275,9 @@ const AdminPage = () => {
   };
 
   const handleAddUser = async () => {
-    if (!newFormData.Name) return Swal.fire('請輸入姓名', '', 'warning');
+    if (!newFormData.Name) return Swal.fire(lang === 'zh' ? '請輸入姓名' : 'Please enter a name', '', 'warning');
     if (users.some(u => u.Name === newFormData.Name)) {
-      return Swal.fire('姓名重複', '該隊員已存在', 'warning');
+      return Swal.fire(lang === 'zh' ? '姓名重複' : 'Duplicate name', lang === 'zh' ? '該隊員已存在' : 'This member already exists', 'warning');
     }
 
     setLoading(true);
@@ -263,7 +285,7 @@ const AdminPage = () => {
 
     if (res.success) {
       // 顯示成功訊息 (先顯示，不阻塞後續操作)
-      Swal.fire({ icon: 'success', title: '新增成功', timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: lang === 'zh' ? '新增成功' : 'Added successfully', timer: 1500, showConfirmButton: false });
 
       // Optimistic UI: 立即更新本地 state
       setUsers(prev => [...prev, {
@@ -300,19 +322,19 @@ const AdminPage = () => {
       })();
     } else {
       setLoading(false);
-      Swal.fire('新增失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '新增失敗' : 'Add failed', res.message, 'error');
     }
   };
 
   const handleDeleteClick = async (user) => {
     const result = await Swal.fire({
-      title: '確定要狠心刪除這個隊友嗎?',
-      text: `將刪除: ${user.Name} `,
+      title: lang === 'zh' ? '確定要狠心刪除這個隊友嗎?' : 'Are you sure you want to delete this teammate?',
+      text: lang === 'zh' ? `將刪除: ${user.Name} ` : `This will delete: ${user.Name} `,
       showCancelButton: true,
       confirmButtonColor: '#d33',
       cancelButtonColor: '#3085d6',
-      confirmButtonText: '確認',
-      cancelButtonText: '取消'
+      confirmButtonText: lang === 'zh' ? '確認' : 'Confirm',
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
     });
 
     if (result.isConfirmed) {
@@ -321,10 +343,10 @@ const AdminPage = () => {
       setLoading(false);
 
       if (res.success) {
-        Swal.fire({ icon: 'success', title: '已刪除', timer: 1500, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: lang === 'zh' ? '已刪除' : 'Deleted', timer: 1500, showConfirmButton: false });
         loadData();
       } else {
-        Swal.fire('刪除失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete failed', res.message, 'error');
       }
     }
   };
@@ -345,11 +367,11 @@ const AdminPage = () => {
     setLoading(false);
 
     if (res.success) {
-      await Swal.fire({ icon: 'success', title: '已更新隊員資料！', timer: 1500, showConfirmButton: false });
+      await Swal.fire({ icon: 'success', title: lang === 'zh' ? '已更新隊員資料！' : 'Member updated!', timer: 1500, showConfirmButton: false });
       setEditingId(null);
       loadData();
     } else {
-      Swal.fire('更新失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '更新失敗' : 'Update failed', res.message, 'error');
     }
   };
 
@@ -369,23 +391,23 @@ const AdminPage = () => {
   // ==========================================
   const handleUpdateEquipment = async () => {
     const finalItem = equipForm.item === "新增新裝備品項" ? equipForm.customItem : equipForm.item;
-    if (!finalItem) return Swal.fire('請輸入裝備名稱', '', 'warning');
+    if (!finalItem) return Swal.fire(lang === 'zh' ? '請輸入裝備名稱' : 'Please enter an equipment name', '', 'warning');
 
     setLoading(true);
     const res = await postData('updateEquipment', { Item: finalItem, Count: equipForm.count });
     setLoading(false);
 
     if (res.success) {
-      Swal.fire({ icon: 'success', title: '裝備庫存已更新', timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: lang === 'zh' ? '裝備庫存已更新' : 'Equipment inventory updated', timer: 1500, showConfirmButton: false });
       setEquipForm({ item: EQUIPMENT_OPTIONS[0], customItem: '', count: 0 });
       loadData();
     } else {
-      Swal.fire('失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '失敗' : 'Failed', res.message, 'error');
     }
   };
 
   const handleAddBorrowRecord = async () => {
-    if (!borrowForm.name || !borrowForm.date) return Swal.fire('請填寫完整借用資訊', '', 'warning');
+    if (!borrowForm.name || !borrowForm.date) return Swal.fire(lang === 'zh' ? '請填寫完整借用資訊' : 'Please fill in all borrowing details', '', 'warning');
 
     setLoading(true);
     const res = await postData('addBorrowRecord', {
@@ -397,23 +419,23 @@ const AdminPage = () => {
     setLoading(false);
 
     if (res.success) {
-      Swal.fire({ icon: 'success', title: '借用紀錄已新增', timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: lang === 'zh' ? '借用紀錄已新增' : 'Borrow record added', timer: 1500, showConfirmButton: false });
       setBorrowForm({ ...borrowForm, name: '', date: '' });
       loadData();
     } else {
-      Swal.fire('失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '失敗' : 'Failed', res.message, 'error');
     }
   };
 
   // ✨ 刪除借用紀錄 (點擊紅色 - )
   const handleDeleteBorrow = async (record) => {
     const result = await Swal.fire({
-      title: '確定刪除此紀錄?',
-      text: `${record.Name} 借用 ${record.Item} (此動作視為已歸還)`,
+      title: lang === 'zh' ? '確定刪除此紀錄?' : 'Delete this record?',
+      text: lang === 'zh' ? `${record.Name} 借用 ${record.Item} (此動作視為已歸還)` : `${record.Name} borrowed ${equipmentLabel(record.Item, lang)} (this will be treated as returned)`,
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      cancelButtonText: '取消',
-      confirmButtonText: '刪除'
+      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel',
+      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete'
     });
 
     if (result.isConfirmed) {
@@ -426,10 +448,10 @@ const AdminPage = () => {
       setLoading(false);
 
       if (res.success) {
-        Swal.fire({ icon: 'success', title: '紀錄已刪除', timer: 1500, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: lang === 'zh' ? '紀錄已刪除' : 'Record deleted', timer: 1500, showConfirmButton: false });
         loadData();
       } else {
-        Swal.fire('刪除失敗', '請確認後端程式碼已更新', 'error');
+        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete failed', lang === 'zh' ? '請確認後端程式碼已更新' : 'Please confirm the backend code is up to date', 'error');
       }
     }
   };
@@ -522,7 +544,7 @@ const AdminPage = () => {
               } `}
           >
             <Users size={20} />
-            隊員資料管理
+            {lang === 'zh' ? '隊員資料管理' : 'Member Management'}
           </button>
           <button
             onClick={() => setActiveTab('equipment')}
@@ -533,7 +555,7 @@ const AdminPage = () => {
               } `}
           >
             <Package size={20} />
-            裝備管理
+            {lang === 'zh' ? '裝備管理' : 'Equipment Management'}
           </button>
           <button
             onClick={() => setActiveTab('auth_users')}
@@ -544,7 +566,7 @@ const AdminPage = () => {
               } `}
           >
             <Shield size={20} />
-            使用者帳號管理
+            {lang === 'zh' ? '使用者帳號管理' : 'User Account Management'}
           </button>
         </div>
 
@@ -604,7 +626,7 @@ const AdminPage = () => {
                       className="w-full p-2 border rounded bg-white focus:border-purple-500 outline-none text-sm text-gray-800"
                     >
                       {POSITION_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
+                        <option key={opt} value={opt}>{positionLabel(opt, lang)}</option>
                       ))}
                     </select>
                   </div>
@@ -646,7 +668,7 @@ const AdminPage = () => {
                       <input
                         type="text"
                         className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 block w-full pl-10 p-2 outline-none placeholder-gray-400"
-                        placeholder="可輸入隊員姓名、Email 搜尋"
+                        placeholder={lang === 'zh' ? '可輸入隊員姓名、Email 搜尋' : 'Search by name or email'}
                         value={searchTerm}
                         onChange={(e) => {
                           setSearchTerm(e.target.value);
@@ -661,7 +683,7 @@ const AdminPage = () => {
 
                 <div className="flex flex-col gap-2">
                   {filteredUsers.length === 0 ? (
-                    <p className="text-gray-400 text-center py-8">{searchTerm ? '查無符合資料' : t('admin_no_members')}</p>
+                    <p className="text-gray-400 text-center py-8">{searchTerm ? (lang === 'zh' ? '查無符合資料' : 'No matching results') : t('admin_no_members')}</p>
                   ) : (
                     <>
                       {filteredUsers.slice((memberPage - 1) * 5, memberPage * 5).map((user) => {
@@ -685,7 +707,7 @@ const AdminPage = () => {
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
                                   className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition"
-                                  title="刪除"
+                                  title={lang === 'zh' ? '刪除' : 'Delete'}
                                 >
                                   <MinusCircle size={18} />
                                 </button>
@@ -693,7 +715,7 @@ const AdminPage = () => {
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
                                   className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-600 hover:text-white transition"
-                                  title="編輯"
+                                  title={lang === 'zh' ? '編輯' : 'Edit'}
                                 >
                                   <Edit size={16} />
                                 </button>
@@ -704,11 +726,11 @@ const AdminPage = () => {
                               <div className="p-4 bg-white border-t border-gray-100 animate-fadeIn">
                                 {isEditing ? (
                                   <div className="space-y-3">
-                                    <div className="text-sm text-purple-600 font-bold mb-2">正在編輯: {user.Name}</div>
+                                    <div className="text-sm text-purple-600 font-bold mb-2">{lang === 'zh' ? '正在編輯:' : 'Editing:'} {user.Name}</div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                       <div>
-                                        <label className="text-xs text-gray-400">體重</label>
+                                        <label className="text-xs text-gray-400">{lang === 'zh' ? '體重' : 'Weight'}</label>
                                         <input
                                           name="Weight"
                                           type="number"
@@ -718,7 +740,7 @@ const AdminPage = () => {
                                         />
                                       </div>
                                       <div>
-                                        <label className="text-xs text-gray-400">技術評分</label>
+                                        <label className="text-xs text-gray-400">{lang === 'zh' ? '技術評分' : 'Skill rating'}</label>
                                         <select
                                           name="Skill_Rating"
                                           value={editFormData.Skill_Rating}
@@ -731,14 +753,14 @@ const AdminPage = () => {
                                     </div>
 
                                     <div>
-                                      <label className="text-xs text-gray-400">位置</label>
+                                      <label className="text-xs text-gray-400">{lang === 'zh' ? '位置' : 'Position'}</label>
                                       <select
                                         name="Position"
                                         value={editFormData.Position}
                                         onChange={handleEditChange}
                                         className="w-full p-2 border rounded text-sm bg-white text-gray-800"
                                       >
-                                        {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        {POSITION_OPTIONS.map(opt => <option key={opt} value={opt}>{positionLabel(opt, lang)}</option>)}
                                       </select>
                                     </div>
 
@@ -763,12 +785,12 @@ const AdminPage = () => {
                                     {user.Email && (
                                       <p><span className="font-semibold text-gray-800 inline-block w-20">Email:</span> {user.Email}</p>
                                     )}
-                                    <p><span className="font-semibold text-gray-800 inline-block w-20">體重:</span> {user.Weight} kg</p>
-                                    <p><span className="font-semibold text-gray-800 inline-block w-20">技術評分:</span> Level {user.Skill_Rating}</p>
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">{lang === 'zh' ? '體重:' : 'Weight:'}</span> {user.Weight} kg</p>
+                                    <p><span className="font-semibold text-gray-800 inline-block w-20">{lang === 'zh' ? '技術評分:' : 'Skill rating:'}</span> Level {user.Skill_Rating}</p>
                                     <p>
-                                      <span className="font-semibold text-gray-800 inline-block w-20">位置:</span>
+                                      <span className="font-semibold text-gray-800 inline-block w-20">{lang === 'zh' ? '位置:' : 'Position:'}</span>
                                       <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs ml-1">
-                                        {user.Position}
+                                        {positionLabel(user.Position, lang)}
                                       </span>
                                     </p>
                                   </div>
@@ -819,32 +841,32 @@ const AdminPage = () => {
               {/* 左：裝備庫存管理 */}
               <div className="w-full md:w-1/2 bg-white p-6 rounded-xl shadow-sm border border-blue-100">
                 <h3 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2 flex items-center gap-2">
-                  <Settings size={18} /> 裝備庫存管理
+                  <Settings size={18} /> {lang === 'zh' ? '裝備庫存管理' : 'Equipment Inventory'}
                 </h3>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">選擇裝備</label>
+                    <label className="block text-sm text-gray-500 mb-1">{lang === 'zh' ? '選擇裝備' : 'Select equipment'}</label>
                     <select
                       className="w-full p-2 border rounded bg-white text-gray-800"
                       value={equipForm.item}
                       onChange={(e) => setEquipForm({ ...equipForm, item: e.target.value })}
                     >
-                      {EQUIPMENT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      {EQUIPMENT_OPTIONS.map(opt => <option key={opt} value={opt}>{equipmentLabel(opt, lang)}</option>)}
                     </select>
                   </div>
 
                   {equipForm.item === "新增新裝備品項" && (
                     <input
                       className="w-full p-2 border rounded focus:border-blue-500 text-gray-800"
-                      placeholder="請輸入新裝備名稱"
+                      placeholder={lang === 'zh' ? '請輸入新裝備名稱' : 'Enter new equipment name'}
                       value={equipForm.customItem}
                       onChange={(e) => setEquipForm({ ...equipForm, customItem: e.target.value })}
                     />
                   )}
 
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">數量 (0-15)</label>
+                    <label className="block text-sm text-gray-500 mb-1">{lang === 'zh' ? '數量 (0-15)' : 'Quantity (0-15)'}</label>
                     <select
                       className="w-full p-2 border rounded bg-white text-gray-800"
                       value={equipForm.count}
@@ -858,15 +880,15 @@ const AdminPage = () => {
                     onClick={handleUpdateEquipment}
                     className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
                   >
-                    <Save size={18} /> 確認更新庫存
+                    <Save size={18} /> {lang === 'zh' ? '確認更新庫存' : 'Update inventory'}
                   </button>
 
                   <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-bold text-gray-500 mb-2">目前庫存概覽:</h4>
+                    <h4 className="text-sm font-bold text-gray-500 mb-2">{lang === 'zh' ? '目前庫存概覽:' : 'Current inventory:'}</h4>
                     <div className="flex flex-wrap gap-2">
                       {equipment.map((eq, idx) => (
                         <span key={idx} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
-                          {eq.Item}: {eq.Count}
+                          {equipmentLabel(eq.Item, lang)}: {eq.Count}
                         </span>
                       ))}
                     </div>
@@ -877,17 +899,17 @@ const AdminPage = () => {
               {/* 右：新增借用紀錄 */}
               <div className="w-full md:w-1/2 bg-white p-6 rounded-xl shadow-sm border border-green-100">
                 <h3 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2 flex items-center gap-2">
-                  <FileText size={18} /> 新增借用紀錄
+                  <FileText size={18} /> {lang === 'zh' ? '新增借用紀錄' : 'Add Borrow Record'}
                 </h3>
 
                 <div className="space-y-4">
                   {/* ✨ 借用人姓名：改成下拉搜尋 Input + Datalist */}
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">借用人姓名 (可輸入搜尋)</label>
+                    <label className="block text-sm text-gray-500 mb-1">{lang === 'zh' ? '借用人姓名 (可輸入搜尋)' : 'Borrower name (type to search)'}</label>
                     <input
                       list="user-names"
                       className="w-full p-2 border rounded text-gray-800"
-                      placeholder="請輸入或選擇姓名"
+                      placeholder={lang === 'zh' ? '請輸入或選擇姓名' : 'Enter or select a name'}
                       value={borrowForm.name}
                       onChange={(e) => setBorrowForm({ ...borrowForm, name: e.target.value })}
                     />
@@ -899,7 +921,7 @@ const AdminPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-500 mb-1">借用日期</label>
+                    <label className="block text-sm text-gray-500 mb-1">{lang === 'zh' ? '借用日期' : 'Borrow date'}</label>
                     <input
                       type="date"
                       className="w-full p-2 border rounded bg-white text-gray-800"
@@ -910,30 +932,30 @@ const AdminPage = () => {
 
                   <div className="flex gap-2">
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email (選填)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{lang === 'zh' ? 'Email (選填)' : 'Email (optional)'}</label>
                       <input
                         type="email"
                         name="Email"
                         value={newFormData.Email}
                         onChange={handleNewFormChange}
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-sky-500 outline-none transition text-gray-800"
-                        placeholder="範例: user@ruma.com"
+                        placeholder={lang === 'zh' ? '範例: user@ruma.com' : 'e.g. user@ruma.com'}
                       />
                     </div>
                     <div className="md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">體重 (kg)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{lang === 'zh' ? '體重 (kg)' : 'Weight (kg)'}</label>
                       <select
                         className="w-full p-2 border rounded bg-white text-gray-800"
                         value={borrowForm.item}
                         onChange={(e) => setBorrowForm({ ...borrowForm, item: e.target.value })}
                       >
                         {EQUIPMENT_OPTIONS.filter(o => o !== "新增新裝備品項").map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
+                          <option key={opt} value={opt}>{equipmentLabel(opt, lang)}</option>
                         ))}
                       </select>
                     </div>
                     <div className="w-1/3">
-                      <label className="block text-sm text-gray-500 mb-1">數量 (1-10)</label>
+                      <label className="block text-sm text-gray-500 mb-1">{lang === 'zh' ? '數量 (1-10)' : 'Quantity (1-10)'}</label>
                       <select
                         className="w-full p-2 border rounded bg-white text-gray-800"
                         value={borrowForm.count}
@@ -948,19 +970,19 @@ const AdminPage = () => {
                     onClick={handleAddBorrowRecord}
                     className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
                   >
-                    <Plus size={18} /> 新增借用紀錄
+                    <Plus size={18} /> {lang === 'zh' ? '新增借用紀錄' : 'Add Borrow Record'}
                   </button>
 
                   {/* ✨ 新增：顯示最新借用紀錄 + 刪除功能 */}
                   <div className="mt-6 pt-4 border-t">
                     <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center justify-between">
-                      最新借用紀錄 (Records)
-                      <span className="text-xs font-normal text-gray-400">點擊紅色按鈕刪除</span>
+                      {lang === 'zh' ? '最新借用紀錄 (Records)' : 'Latest borrow records'}
+                      <span className="text-xs font-normal text-gray-400">{lang === 'zh' ? '點擊紅色按鈕刪除' : 'Click the red button to delete'}</span>
                     </h4>
 
                     <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
                       {borrowRecords.length === 0 ? (
-                        <p className="text-xs text-gray-400 text-center">目前無紀錄</p>
+                        <p className="text-xs text-gray-400 text-center">{lang === 'zh' ? '目前無紀錄' : 'No records'}</p>
                       ) : (
                         // 反轉陣列讓最新的顯示在上面
                         [...borrowRecords].reverse().map((record, idx) => (
@@ -968,13 +990,13 @@ const AdminPage = () => {
                             <div className="flex flex-col">
                               <span className="font-bold text-gray-800">{record.Name}</span>
                               <span className="text-xs text-gray-500">
-                                {record.Date ? new Date(record.Date).toLocaleDateString('zh-TW') : '-'} / {record.Item} x {record.Count}
+                                {record.Date ? new Date(record.Date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US') : '-'} / {equipmentLabel(record.Item, lang)} x {record.Count}
                               </span>
                             </div>
                             <button
                               onClick={() => handleDeleteBorrow(record)}
                               className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"
-                              title="刪除紀錄 (歸還)"
+                              title={lang === 'zh' ? '刪除紀錄 (歸還)' : 'Delete record (returned)'}
                             >
                               <MinusCircle size={16} />
                             </button>
@@ -1001,47 +1023,49 @@ const AdminPage = () => {
                 <div>
                   <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
                     <Shield size={20} className="text-emerald-600" />
-                    權限角色管理
+                    {lang === 'zh' ? '權限角色管理' : 'Role Management'}
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    從隊員資料中選擇成員並指定權限角色
+                    {lang === 'zh' ? '從隊員資料中選擇成員並指定權限角色' : 'Select a member from the roster and assign a role'}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-shrink-0">
-                  <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-600 rounded-full whitespace-nowrap">隊員</span>
-                  <span className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 rounded-full whitespace-nowrap">幹部</span>
-                  <span className="px-2 sm:px-3 py-1 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap">管理員</span>
+                  <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-600 rounded-full whitespace-nowrap">{roleLabel('member', lang)}</span>
+                  <span className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 rounded-full whitespace-nowrap">{roleLabel('management', lang)}</span>
+                  <span className="px-2 sm:px-3 py-1 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap">{roleLabel('admin', lang)}</span>
                 </div>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800">
-                ℹ️ 此處顯示已在「隊員資料管理」中建立的所有隊員。可為每位隊員指派系統權限角色。
+                {lang === 'zh'
+                  ? 'ℹ️ 此處顯示已在「隊員資料管理」中建立的所有隊員。可為每位隊員指派系統權限角色。'
+                  : 'ℹ️ This lists all members created under "Member Management". You can assign a system role to each member.'}
               </div>
             </div>
 
             {/* 隊員列表與權限指派 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h2 className="text-lg font-bold text-gray-700">隊員列表</h2>
-                <span className="text-sm text-gray-400">共 {users.length} 人</span>
+                <h2 className="text-lg font-bold text-gray-700">{lang === 'zh' ? '隊員列表' : 'Member List'}</h2>
+                <span className="text-sm text-gray-400">{lang === 'zh' ? `共 ${users.length} 人` : `${users.length} members`}</span>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-gray-600 text-xs sm:text-sm">
-                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">姓名</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">{lang === 'zh' ? '姓名' : 'Name'}</th>
                       <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Email</th>
-                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">目前權限</th>
-                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">權限指派</th>
-                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">操作</th>
+                      <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">{lang === 'zh' ? '目前權限' : 'Current Role'}</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">{lang === 'zh' ? '權限指派' : 'Assign Role'}</th>
+                      <th className="text-center p-2 sm:p-3 font-medium whitespace-nowrap">{lang === 'zh' ? '操作' : 'Actions'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="text-center py-8 text-gray-400">
-                          請先在「隊員資料管理」中新增隊員
+                          {lang === 'zh' ? '請先在「隊員資料管理」中新增隊員' : 'Please add members under "Member Management" first'}
                         </td>
                       </tr>
                     ) : (
@@ -1067,14 +1091,14 @@ const AdminPage = () => {
                                   <button
                                     onClick={() => handleSaveEmail(member.Name)}
                                     className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                                    title="儲存"
+                                    title={lang === 'zh' ? '儲存' : 'Save'}
                                   >
                                     <Check size={16} />
                                   </button>
                                   <button
                                     onClick={() => { setEditingEmailId(null); setEditingEmailValue(''); }}
                                     className="p-1 text-gray-400 hover:bg-gray-100 rounded"
-                                    title="取消"
+                                    title={lang === 'zh' ? '取消' : 'Cancel'}
                                   >
                                     <X size={16} />
                                   </button>
@@ -1084,7 +1108,7 @@ const AdminPage = () => {
                                   {member.Email ? (
                                     <span className="text-gray-600">{member.Email}</span>
                                   ) : (
-                                    <span className="text-gray-400 italic">未設定</span>
+                                    <span className="text-gray-400 italic">{lang === 'zh' ? '未設定' : 'Not set'}</span>
                                   )}
                                   <button
                                     onClick={() => {
@@ -1092,7 +1116,7 @@ const AdminPage = () => {
                                       setEditingEmailValue(member.Email || '');
                                     }}
                                     className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
-                                    title="編輯 Email"
+                                    title={lang === 'zh' ? '編輯 Email' : 'Edit email'}
                                   >
                                     <Edit size={14} />
                                   </button>
@@ -1104,7 +1128,7 @@ const AdminPage = () => {
                                 currentRole === 'management' ? 'bg-blue-100 text-blue-700' :
                                   'bg-gray-100 text-gray-600'
                                 }`}>
-                                {currentRole === 'admin' ? '管理員' : currentRole === 'management' ? '幹部' : '隊員'}
+                                {roleLabel(currentRole, lang)}
                               </span>
                             </td>
                             <td className="p-3">
@@ -1113,18 +1137,18 @@ const AdminPage = () => {
                                 onChange={async (e) => {
                                   const newRole = e.target.value;
                                   const confirm = await Swal.fire({
-                                    title: '確認變更權限?',
-                                    html: `將 <b>${member.Name}</b> 的權限設為「<b>${newRole === 'admin' ? '管理員' : newRole === 'management' ? '幹部' : '隊員'}</b>」`,
+                                    title: lang === 'zh' ? '確認變更權限?' : 'Confirm role change?',
+                                    html: lang === 'zh' ? `將 <b>${member.Name}</b> 的權限設為「<b>${roleLabel(newRole, lang)}</b>」` : `Set the role of <b>${member.Name}</b> to "<b>${roleLabel(newRole, lang)}</b>"?`,
                                     icon: 'question',
                                     showCancelButton: true,
                                     confirmButtonColor: '#10b981',
-                                    confirmButtonText: '確認',
-                                    cancelButtonText: '取消'
+                                    confirmButtonText: lang === 'zh' ? '確認' : 'Confirm',
+                                    cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
                                   });
 
                                   if (confirm.isConfirmed) {
                                     if (!member.Email) {
-                                      return Swal.fire('需要 Email', '請先在隊員資料中設定 Email', 'warning');
+                                      return Swal.fire(lang === 'zh' ? '需要 Email' : 'Email required', lang === 'zh' ? '請先在隊員資料中設定 Email' : 'Please set an email in the member profile first', 'warning');
                                     }
 
                                     setLoading(true);
@@ -1133,28 +1157,28 @@ const AdminPage = () => {
                                       const createRes = await adminCreateUser(member.Email, '000000', member.Name, newRole);
                                       if (!createRes.success) {
                                         setLoading(false);
-                                        return Swal.fire('建立帳號失敗', createRes.message, 'error');
+                                        return Swal.fire(lang === 'zh' ? '建立帳號失敗' : 'Failed to create account', createRes.message, 'error');
                                       }
                                     } else {
                                       // 更新現有用戶的權限
                                       const updateRes = await adminUpdateUserRole(authUser.id, newRole);
                                       if (!updateRes.success) {
                                         setLoading(false);
-                                        return Swal.fire('更新權限失敗', updateRes.message, 'error');
+                                        return Swal.fire(lang === 'zh' ? '更新權限失敗' : 'Failed to update role', updateRes.message, 'error');
                                       }
                                     }
 
                                     await loadAuthUsers();
                                     setLoading(false);
-                                    Swal.fire({ icon: 'success', title: '權限已更新', timer: 1500, showConfirmButton: false });
+                                    Swal.fire({ icon: 'success', title: lang === 'zh' ? '權限已更新' : 'Role updated', timer: 1500, showConfirmButton: false });
                                   }
                                 }}
                                 className="px-2 sm:px-3 py-1 sm:py-1.5 border rounded-lg bg-white text-gray-800 text-[10px] sm:text-sm focus:ring-2 focus:ring-emerald-200"
                                 disabled={!member.Email}
                               >
-                                <option value="member">隊員</option>
-                                <option value="management">幹部</option>
-                                <option value="admin">管理員</option>
+                                <option value="member">{roleLabel('member', lang)}</option>
+                                <option value="management">{roleLabel('management', lang)}</option>
+                                <option value="admin">{roleLabel('admin', lang)}</option>
                               </select>
                             </td>
                             <td className="p-3 text-center">
@@ -1162,13 +1186,13 @@ const AdminPage = () => {
                                 <button
                                   onClick={async () => {
                                     const confirm = await Swal.fire({
-                                      title: '確定刪除此使用者?',
-                                      html: `將刪除 <b>${member.Name}</b> 的系統帳號<br/><span class="text-red-500">此操作無法復原</span>`,
+                                      title: lang === 'zh' ? '確定刪除此使用者?' : 'Delete this user?',
+                                      html: lang === 'zh' ? `將刪除 <b>${member.Name}</b> 的系統帳號<br/><span class="text-red-500">此操作無法復原</span>` : `This will delete the system account of <b>${member.Name}</b><br/><span class="text-red-500">This action cannot be undone</span>`,
                                       icon: 'warning',
                                       showCancelButton: true,
                                       confirmButtonColor: '#d33',
-                                      confirmButtonText: '刪除',
-                                      cancelButtonText: '取消'
+                                      confirmButtonText: lang === 'zh' ? '刪除' : 'Delete',
+                                      cancelButtonText: lang === 'zh' ? '取消' : 'Cancel'
                                     });
 
                                     if (confirm.isConfirmed) {
@@ -1176,15 +1200,15 @@ const AdminPage = () => {
                                       const res = await adminDeleteUser(authUser.id);
                                       setLoading(false);
                                       if (res.success) {
-                                        Swal.fire({ icon: 'success', title: '已刪除', timer: 1500, showConfirmButton: false });
+                                        Swal.fire({ icon: 'success', title: lang === 'zh' ? '已刪除' : 'Deleted', timer: 1500, showConfirmButton: false });
                                         loadAuthUsers();
                                       } else {
-                                        Swal.fire('刪除失敗', res.message, 'error');
+                                        Swal.fire(lang === 'zh' ? '刪除失敗' : 'Delete failed', res.message, 'error');
                                       }
                                     }
                                   }}
                                   className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition"
-                                  title="刪除帳號"
+                                  title={lang === 'zh' ? '刪除帳號' : 'Delete account'}
                                 >
                                   <MinusCircle size={18} />
                                 </button>
@@ -1201,21 +1225,21 @@ const AdminPage = () => {
                 {users.length > 5 && (
                   <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
                     <span className="text-sm text-gray-500">
-                      第 {rolePage} / {Math.ceil(users.length / 5)} 頁
+                      {lang === 'zh' ? `第 ${rolePage} / ${Math.ceil(users.length / 5)} 頁` : `Page ${rolePage} / ${Math.ceil(users.length / 5)}`}
                     </span>
                     <button
                       onClick={() => setRolePage(p => Math.max(1, p - 1))}
                       disabled={rolePage === 1}
                       className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
                     >
-                      ← 上一頁
+                      {lang === 'zh' ? '← 上一頁' : '← Previous'}
                     </button>
                     <button
                       onClick={() => setRolePage(p => Math.min(Math.ceil(users.length / 5), p + 1))}
                       disabled={rolePage >= Math.ceil(users.length / 5)}
                       className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-1"
                     >
-                      下一頁 →
+                      {lang === 'zh' ? '下一頁 →' : 'Next →'}
                     </button>
                   </div>
                 )}
@@ -1229,7 +1253,7 @@ const AdminPage = () => {
           <div className="bg-white rounded-xl shadow-lg border border-rose-100 overflow-hidden animate-fade-in-up max-w-full">
             <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center">
               <h2 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
-                <MessageSquareWarning className="text-rose-500" /> Bug 回報列表
+                <MessageSquareWarning className="text-rose-500" /> {lang === 'zh' ? 'Bug 回報列表' : 'Bug Reports'}
               </h2>
               <button onClick={loadBugReports} className="p-2 hover:bg-gray-100 rounded-full transition">
                 <RefreshCw size={20} className="text-gray-500" />
@@ -1238,26 +1262,26 @@ const AdminPage = () => {
 
             {/* Mobile hint */}
             <div className="md:hidden px-4 py-2 bg-gray-50 text-xs text-gray-500 flex items-center gap-1 border-b">
-              👆 左右滑動查看更多
+              {lang === 'zh' ? '👆 左右滑動查看更多' : '👆 Swipe left/right to see more'}
             </div>
 
             <div className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="w-full text-left" style={{ minWidth: '800px' }}>
                 <thead className="bg-gray-50 text-gray-600 text-xs md:text-sm font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="p-3 md:p-4 border-b whitespace-nowrap">狀態</th>
-                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報日期</th>
-                    <th className="p-3 md:p-4 border-b whitespace-nowrap">回報者</th>
-                    <th className="p-3 md:p-4 border-b">描述</th>
-                    <th className="p-3 md:p-4 border-b whitespace-nowrap">截圖</th>
-                    <th className="p-3 md:p-4 border-b text-right whitespace-nowrap">操作</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">{lang === 'zh' ? '狀態' : 'Status'}</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">{lang === 'zh' ? '回報日期' : 'Reported On'}</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">{lang === 'zh' ? '回報者' : 'Reporter'}</th>
+                    <th className="p-3 md:p-4 border-b">{lang === 'zh' ? '描述' : 'Description'}</th>
+                    <th className="p-3 md:p-4 border-b whitespace-nowrap">{lang === 'zh' ? '截圖' : 'Screenshot'}</th>
+                    <th className="p-3 md:p-4 border-b text-right whitespace-nowrap">{lang === 'zh' ? '操作' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {bugs.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="p-8 text-center text-gray-400">
-                        目前沒有 Bug 回報 🎉
+                        {lang === 'zh' ? '目前沒有 Bug 回報 🎉' : 'No bug reports 🎉'}
                       </td>
                     </tr>
                   ) : (
@@ -1267,12 +1291,12 @@ const AdminPage = () => {
                           <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1
                           ${bug.is_fixed ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'}`}>
                             {bug.is_fixed ? <Check size={12} /> : <MessageSquareWarning size={12} />}
-                            {bug.is_fixed ? '已修復' : '待處理'}
+                            {bug.is_fixed ? (lang === 'zh' ? '已修復' : 'Fixed') : (lang === 'zh' ? '待處理' : 'Pending')}
                           </span>
                         </td>
                         <td className="p-3 md:p-4 text-xs md:text-sm text-gray-600 whitespace-nowrap">
-                          {new Date(bug.created_at).toLocaleDateString()}
-                          <div className="text-xs text-gray-400">{new Date(bug.created_at).toLocaleTimeString()}</div>
+                          {new Date(bug.created_at).toLocaleDateString(lang === 'zh' ? undefined : 'en-US')}
+                          <div className="text-xs text-gray-400">{new Date(bug.created_at).toLocaleTimeString(lang === 'zh' ? undefined : 'en-US')}</div>
                         </td>
                         <td className="p-3 md:p-4 text-xs md:text-sm font-medium text-gray-800">
                           <div className="truncate max-w-[120px] md:max-w-none">{bug.reporter_name}</div>
@@ -1288,7 +1312,7 @@ const AdminPage = () => {
                                 onClick={() => setExpandedBugId(expandedBugId === bug.id ? null : bug.id)}
                                 className="text-blue-600 hover:underline text-xs ml-1 whitespace-nowrap"
                               >
-                                {expandedBugId === bug.id ? '收起' : '顯示更多'}
+                                {expandedBugId === bug.id ? (lang === 'zh' ? '收起' : 'Show less') : (lang === 'zh' ? '顯示更多' : 'Show more')}
                               </button>
                             </div>
                           ) : (
@@ -1303,15 +1327,15 @@ const AdminPage = () => {
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-blue-600 hover:underline text-xs md:text-sm font-medium whitespace-nowrap"
                             >
-                              <ImageIcon size={14} /> 截圖 <ExternalLink size={10} />
+                              <ImageIcon size={14} /> {lang === 'zh' ? '截圖' : 'Screenshot'} <ExternalLink size={10} />
                             </a>
                           ) : (
-                            <span className="text-gray-400 text-xs italic">無</span>
+                            <span className="text-gray-400 text-xs italic">{lang === 'zh' ? '無' : 'None'}</span>
                           )}
                         </td>
                         <td className="p-3 md:p-4 text-right">
                           <label className="flex items-center justify-end cursor-pointer gap-1 md:gap-2">
-                            <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">{bug.is_fixed ? '未修復' : '已修復'}</span>
+                            <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">{bug.is_fixed ? (lang === 'zh' ? '未修復' : 'Mark unfixed') : (lang === 'zh' ? '已修復' : 'Mark fixed')}</span>
                             <input
                               type="checkbox"
                               checked={bug.is_fixed}
@@ -1321,7 +1345,7 @@ const AdminPage = () => {
                           </label>
                           {bug.is_fixed && bug.fixed_at && (
                             <div className="text-xs text-gray-400 mt-1">
-                              {new Date(bug.fixed_at).toLocaleDateString()}
+                              {new Date(bug.fixed_at).toLocaleDateString(lang === 'zh' ? undefined : 'en-US')}
                             </div>
                           )}
                         </td>
@@ -1336,7 +1360,7 @@ const AdminPage = () => {
             {bugs.length > 5 && (
               <div className="p-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
                 <span className="text-sm text-gray-500">
-                  共 {bugs.length} 筆，第 {bugPage} / {Math.ceil(bugs.length / 5)} 頁
+                  {lang === 'zh' ? `共 ${bugs.length} 筆，第 ${bugPage} / ${Math.ceil(bugs.length / 5)} 頁` : `${bugs.length} records, page ${bugPage} / ${Math.ceil(bugs.length / 5)}`}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -1344,14 +1368,14 @@ const AdminPage = () => {
                     disabled={bugPage === 1}
                     className="px-4 py-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-100 transition"
                   >
-                    ← 上一頁
+                    {lang === 'zh' ? '← 上一頁' : '← Previous'}
                   </button>
                   <button
                     onClick={() => setBugPage(p => Math.min(Math.ceil(bugs.length / 5), p + 1))}
                     disabled={bugPage >= Math.ceil(bugs.length / 5)}
                     className="px-4 py-2 rounded-lg bg-rose-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-600 transition"
                   >
-                    下一頁 →
+                    {lang === 'zh' ? '下一頁 →' : 'Next →'}
                   </button>
                 </div>
               </div>
@@ -1364,7 +1388,7 @@ const AdminPage = () => {
           <div className="fixed inset-0 bg-white/60 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 border border-sky-100">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
-              <span className="text-gray-700 font-medium">資料同步中...</span>
+              <span className="text-gray-700 font-medium">{lang === 'zh' ? '資料同步中...' : 'Syncing data...'}</span>
             </div>
           </div>
         )}

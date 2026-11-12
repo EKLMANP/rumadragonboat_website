@@ -27,6 +27,7 @@ import { CSS } from '@dnd-kit/utilities';
 // --- Sortable Video Card Component ---
 // This is used exclusively when 'sortMode' is true
 const SortableVideoCard = ({ video, id }) => {
+    const { lang } = useLanguage();
     const {
         attributes,
         listeners,
@@ -59,7 +60,7 @@ const SortableVideoCard = ({ video, id }) => {
                     {...listeners}
                 >
                     <Move className="text-white w-10 h-10" />
-                    <span className="text-sm text-white font-medium mt-2">拖移排序</span>
+                    <span className="text-sm text-white font-medium mt-2">{lang === 'zh' ? '拖移排序' : 'Drag to reorder'}</span>
                 </div>
             </div>
             {/* Content */}
@@ -239,18 +240,18 @@ export default function VideosPage() {
             html: `
                 <div class="space-y-4 text-left p-2">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">影片標題 / Video Title</label>
+                        <label class="block text-sm font-medium text-gray-700">${lang === 'zh' ? '影片標題 / Video Title' : 'Video Title'}</label>
                         <input id="swal-title" class="${inputClasses}" placeholder="Enter title">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">影片類別 / Category</label>
+                        <label class="block text-sm font-medium text-gray-700">${lang === 'zh' ? '影片類別 / Category' : 'Category'}</label>
                         <select id="swal-category" class="${inputClasses}">
-                            ${CATEGORIES.map(c => `<option value="${c.id}">${c.label_zh} / ${c.label_en}</option>`).join('')}
+                            ${CATEGORIES.map(c => `<option value="${c.id}">${lang === 'zh' ? `${c.label_zh} / ${c.label_en}` : c.label_en}</option>`).join('')}
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">YouTube URL</label>
-                        <p class="text-xs text-gray-500 mt-1">請先將影片上傳到 YouTube，再把 YouTube 上面的影片連結貼過來</p>
+                        <p class="text-xs text-gray-500 mt-1">${lang === 'zh' ? '請先將影片上傳到 YouTube，再把 YouTube 上面的影片連結貼過來' : 'Please upload your video to YouTube first, then paste the YouTube link here'}</p>
                         <input id="swal-url" class="${inputClasses}" placeholder="https://youtube.com/...">
                     </div>
                 </div>
@@ -266,11 +267,11 @@ export default function VideosPage() {
                 const url = document.getElementById('swal-url').value;
 
                 if (!title || !url) {
-                    Swal.showValidationMessage('標題與連結為必填 (Title and URL are required)');
+                    Swal.showValidationMessage(lang === 'zh' ? '標題與連結為必填 (Title and URL are required)' : 'Title and URL are required');
                     return false;
                 }
                 if (!getYouTubeId(url)) {
-                    Swal.showValidationMessage('無效的 YouTube 連結 (Invalid YouTube URL)');
+                    Swal.showValidationMessage(lang === 'zh' ? '無效的 YouTube 連結 (Invalid YouTube URL)' : 'Invalid YouTube URL');
                     return false;
                 }
                 return { title, category, url };
@@ -308,13 +309,13 @@ export default function VideosPage() {
             html: `
                 <div class="space-y-4 text-left p-2">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">影片標題 / Video Title</label>
+                        <label class="block text-sm font-medium text-gray-700">${lang === 'zh' ? '影片標題 / Video Title' : 'Video Title'}</label>
                         <input id="swal-title" class="${inputClasses}" value="${video.title.replace(/"/g, '&quot;')}" placeholder="Enter title">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">影片類別 / Category</label>
+                        <label class="block text-sm font-medium text-gray-700">${lang === 'zh' ? '影片類別 / Category' : 'Category'}</label>
                         <select id="swal-category" class="${inputClasses}">
-                            ${CATEGORIES.map(c => `<option value="${c.id}" ${c.id === video.category ? 'selected' : ''}>${c.label_zh} / ${c.label_en}</option>`).join('')}
+                            ${CATEGORIES.map(c => `<option value="${c.id}" ${c.id === video.category ? 'selected' : ''}>${lang === 'zh' ? `${c.label_zh} / ${c.label_en}` : c.label_en}</option>`).join('')}
                         </select>
                     </div>
                     <div>
@@ -334,11 +335,11 @@ export default function VideosPage() {
                 const url = document.getElementById('swal-url').value;
 
                 if (!title || !url) {
-                    Swal.showValidationMessage('標題與連結為必填 (Title and URL are required)');
+                    Swal.showValidationMessage(lang === 'zh' ? '標題與連結為必填 (Title and URL are required)' : 'Title and URL are required');
                     return false;
                 }
                 if (!getYouTubeId(url)) {
-                    Swal.showValidationMessage('無效的 YouTube 連結 (Invalid YouTube URL)');
+                    Swal.showValidationMessage(lang === 'zh' ? '無效的 YouTube 連結 (Invalid YouTube URL)' : 'Invalid YouTube URL');
                     return false;
                 }
                 return { title, category, url };
@@ -548,7 +549,7 @@ export default function VideosPage() {
                                 <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
                                     <Play size={48} className="text-gray-200 mb-4" />
                                     <p className="text-lg font-medium text-gray-500">{lang === 'zh' ? '此類別尚無影片' : 'No videos in this category yet.'}</p>
-                                    <p className="text-sm mt-1">點擊右上方「上傳影片」新增內容</p>
+                                    <p className="text-sm mt-1">{lang === 'zh' ? '點擊右上方「上傳影片」新增內容' : 'Click "Upload Video" at the top right to add content'}</p>
                                 </div>
                             ) : sortMode ? (
                                 // --- SORTING MODE UI ---
@@ -557,8 +558,8 @@ export default function VideosPage() {
                                         <div className="flex items-start gap-2">
                                             <ArrowUpDown size={20} className="text-yellow-600 shrink-0 mt-0.5" />
                                             <div>
-                                                <p className="font-bold">排序模式</p>
-                                                <p className="text-sm opacity-90">請拖曳影片卡片來調整順序，完成後請點擊「確認儲存」。</p>
+                                                <p className="font-bold">{lang === 'zh' ? '排序模式' : 'Sort Mode'}</p>
+                                                <p className="text-sm opacity-90">{lang === 'zh' ? '請拖曳影片卡片來調整順序，完成後請點擊「確認儲存」。' : 'Drag the video cards to reorder them, then click "Confirm & Save" when done.'}</p>
                                             </div>
                                         </div>
                                         <div className="flex gap-2 justify-end">
@@ -570,14 +571,14 @@ export default function VideosPage() {
                                                 className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition whitespace-nowrap"
                                             >
                                                 <X size={16} className="inline mr-1" />
-                                                取消
+                                                {lang === 'zh' ? '取消' : 'Cancel'}
                                             </button>
                                             <button
                                                 onClick={handleSaveOrder}
                                                 className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white border border-transparent rounded-lg font-medium transition shadow-sm whitespace-nowrap"
                                             >
                                                 <Save size={16} className="inline mr-1" />
-                                                確認儲存
+                                                {lang === 'zh' ? '確認儲存' : 'Confirm & Save'}
                                             </button>
                                         </div>
                                     </div>
@@ -645,13 +646,13 @@ export default function VideosPage() {
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="font-bold text-gray-800 line-clamp-2 hover:text-red-600 transition flex items-start gap-1 group/link"
-                                                        title="在 YouTube 另開分頁觀看"
+                                                        title={lang === 'zh' ? '在 YouTube 另開分頁觀看' : 'Watch on YouTube in a new tab'}
                                                     >
                                                         <span>{video.title}</span>
                                                         <ExternalLink size={14} className="opacity-0 group-hover/link:opacity-100 shrink-0 mt-1" />
                                                     </a>
                                                     <p className="text-xs text-gray-400 mt-2 font-medium">
-                                                        {new Date(video.created_at).toLocaleDateString()}
+                                                        {new Date(video.created_at).toLocaleDateString(lang === 'zh' ? undefined : 'en-US')}
                                                     </p>
                                                 </div>
                                             </div>

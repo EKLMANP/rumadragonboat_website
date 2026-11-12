@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     const computedIsManagement = computedIsAdmin || (Array.isArray(userRoles) && userRoles.includes('management'));
 
     // 取得使用者名稱
-    const displayName = userProfile?.name || '隊員';
+    const displayName = userProfile?.name || (lang === 'zh' ? '隊員' : 'Member');
     const avatarLetter = displayName.charAt(0).toUpperCase();
 
     // 處理登出
@@ -209,7 +209,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                     <button
                         onClick={toggleLanguage}
                         className="flex items-center justify-center px-3 py-3 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all"
-                        title={lang === 'zh' ? 'Switch to English' : '切換至中文'}
+                        title={lang === 'zh' ? 'Switch to English' : 'Switch to Chinese'}
                     >
                         <Globe size={18} className="mr-1" />
                         <span className="text-xs font-bold">{lang === 'zh' ? 'EN' : '中'}</span>

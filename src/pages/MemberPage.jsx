@@ -6,9 +6,11 @@ import { User, Calendar, CheckCircle, Trash2, MapPin, Home } from 'lucide-react'
 import { fetchUsers, fetchDates, fetchRegistrations, postData } from '../api/googleSheets';
 import { generateSeating } from '../utils/seatingLogic';
 import SeatVisualizer from '../components/SeatVisualizer';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const MemberPage = () => {
   const navigate = useNavigate();
+  const { lang } = useLanguage();
   const [users, setUsers] = useState([]);
   const [openDates, setOpenDates] = useState([]);
 
@@ -60,7 +62,11 @@ const MemberPage = () => {
       setAllRegs(regsData);
     } catch (error) {
       console.error("載入資料失敗:", error);
-      Swal.fire("讀取錯誤", "無法載入資料，請檢查網路或聯繫管理員", "error");
+      Swal.fire(
+        lang === 'zh' ? '讀取錯誤' : 'Load Error',
+        lang === 'zh' ? '無法載入資料，請檢查網路或聯繫管理員' : 'Unable to load data. Please check your connection or contact an admin.',
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -76,11 +82,19 @@ const MemberPage = () => {
 
   const handleSubmit = async () => {
     if (!selectedName) {
-      Swal.fire('請選擇姓名', '你是誰呢？', 'question');
+      Swal.fire(
+        lang === 'zh' ? '請選擇姓名' : 'Please select your name',
+        lang === 'zh' ? '你是誰呢？' : 'Who are you?',
+        'question'
+      );
       return;
     }
     if (selectedDates.length === 0) {
-      Swal.fire('請選擇日期', '要勾選想參加的練習喔', 'warning');
+      Swal.fire(
+        lang === 'zh' ? '請選擇日期' : 'Please select a date',
+        lang === 'zh' ? '要勾選想參加的練習喔' : 'Check the practices you want to join.',
+        'warning'
+      );
       return;
     }
 
@@ -92,22 +106,26 @@ const MemberPage = () => {
     setLoading(false);
 
     if (res.success) {
-      await Swal.fire('報名成功!', '教練收到你的報名了', 'success');
+      await Swal.fire(
+        lang === 'zh' ? '報名成功!' : 'Registered!',
+        lang === 'zh' ? '教練收到你的報名了' : 'The coach has received your registration.',
+        'success'
+      );
       setSelectedDates([]);
       loadData();
     } else {
-      Swal.fire('報名失敗', res.message, 'error');
+      Swal.fire(lang === 'zh' ? '報名失敗' : 'Registration failed', res.message, 'error');
     }
   };
 
   const handleCancel = async (regDate) => {
     const result = await Swal.fire({
-      title: `取消 ${regDate} 的練習?`,
-      text: "確定不來了嗎 (T_T)",
+      title: lang === 'zh' ? `取消 ${regDate} 的練習?` : `Cancel practice on ${regDate}?`,
+      text: lang === 'zh' ? '確定不來了嗎 (T_T)' : 'Sure you can\'t make it? (T_T)',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: '殘忍取消',
-      cancelButtonText: '再想想',
+      confirmButtonText: lang === 'zh' ? '殘忍取消' : 'Yes, cancel',
+      cancelButtonText: lang === 'zh' ? '再想想' : 'Not yet',
       confirmButtonColor: '#d33',
     });
 
@@ -120,16 +138,16 @@ const MemberPage = () => {
       setLoading(false);
 
       if (res.success) {
-        Swal.fire('已取消', '', 'success');
+        Swal.fire(lang === 'zh' ? '已取消' : 'Cancelled', '', 'success');
         loadData();
       } else {
-        Swal.fire('失敗', res.message, 'error');
+        Swal.fire(lang === 'zh' ? '失敗' : 'Failed', res.message, 'error');
       }
     }
   };
 
   const renderSeatingCharts = () => {
-    if (!Array.isArray(openDates) || openDates.length === 0) return <div className="text-center text-gray-400">目前沒有練習</div>;
+    if (!Array.isArray(openDates) || openDates.length === 0) return <div className="text-center text-gray-400">{lang === 'zh' ? '目前沒有練習' : 'No practices yet'}</div>;
 
     return openDates.map(date => {
       const safeAllRegs = Array.isArray(allRegs) ? allRegs : [];
@@ -178,10 +196,10 @@ const MemberPage = () => {
         />
         <div className="absolute inset-0 bg-black/20 flex flex-col justify-center px-6">
           <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-lg flex items-center gap-2">
-            <User size={32} /> 隊員專區 / Member
+            <User size={32} /> {lang === 'zh' ? '隊員專區 / Member' : 'Member'}
           </h1>
           <p className="text-white text-lg md:text-xl mt-2 font-light opacity-95 drop-shadow-md">
-            船練報名 & 查看槳位 Register & check seat arrangement
+            {lang === 'zh' ? '船練報名 & 查看槳位 Register & check seat arrangement' : 'Register & check seat arrangement'}
           </p>
           <button
             onClick={() => navigate('/')}
@@ -200,17 +218,17 @@ const MemberPage = () => {
 
           <div className="w-full lg:w-1/2 bg-white p-6 rounded-xl shadow-lg border border-sky-100">
             <h3 className="text-xl font-bold text-gray-700 mb-6 flex items-center gap-2 border-b pb-2">
-              <User className="text-sky-500" /> 我要報名
+              <User className="text-sky-500" /> {lang === 'zh' ? '我要報名' : 'Register'}
             </h3>
 
             <div className="mb-6">
-              <label className="block text-gray-600 font-bold mb-2">我是誰 (Name)</label>
+              <label className="block text-gray-600 font-bold mb-2">{lang === 'zh' ? '我是誰 (Name)' : 'Name'}</label>
               <select
                 className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-sky-300 outline-none text-lg text-gray-800"
                 value={selectedName}
                 onChange={(e) => setSelectedName(e.target.value)}
               >
-                <option value="">-- 請選擇姓名 --</option>
+                <option value="">{lang === 'zh' ? '-- 請選擇姓名 --' : '-- Select your name --'}</option>
                 {(Array.isArray(users) ? users : []).map(u => (
                   <option key={u.Name} value={u.Name}>{u.Name}</option>
                 ))}
@@ -218,9 +236,9 @@ const MemberPage = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-gray-600 font-bold mb-2">我要參加的日期 (Dates)</label>
+              <label className="block text-gray-600 font-bold mb-2">{lang === 'zh' ? '我要參加的日期 (Dates)' : 'Dates'}</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {openDates.length === 0 ? <p className="text-gray-400 text-sm">教練還沒開放日期喔...</p> :
+                {openDates.length === 0 ? <p className="text-gray-400 text-sm">{lang === 'zh' ? '教練還沒開放日期喔...' : 'The coach has not opened any dates yet...'}</p> :
                   openDates.map(date => (
                     <label key={date}
                       className={`
@@ -249,28 +267,28 @@ const MemberPage = () => {
                   : 'bg-sky-500 hover:bg-sky-600 text-white transform hover:scale-[1.02]'
                 }`}
             >
-              <CheckCircle /> 確定報名 / Submit
+              <CheckCircle /> {lang === 'zh' ? '確定報名 / Submit' : 'Submit'}
             </button>
           </div>
 
           <div className="w-full lg:w-1/2 bg-white p-6 rounded-xl shadow-lg border border-orange-100">
             <h3 className="text-xl font-bold text-gray-700 mb-6 flex items-center gap-2 border-b pb-2">
-              <Calendar className="text-orange-500" /> 我的練習 (My Schedule)
+              <Calendar className="text-orange-500" /> {lang === 'zh' ? '我的練習 (My Schedule)' : 'My Schedule'}
             </h3>
 
             {!selectedName ? (
               <div className="text-center py-10 bg-gray-50 rounded-lg text-gray-400">
-                請先在左側選擇姓名<br />才能看到你的紀錄喔
+                {lang === 'zh' ? <>請先在左側選擇姓名<br />才能看到你的紀錄喔</> : <>Select your name on the left<br />to see your records</>}
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="font-bold text-xl text-sky-700">{selectedName}</span>
-                  <span className="text-gray-500">已報名的場次：</span>
+                  <span className="text-gray-500">{lang === 'zh' ? '已報名的場次：' : 'Registered sessions:'}</span>
                 </div>
 
                 {myRegistrations.length === 0 ? (
-                  <p className="text-gray-400">目前沒有報名任何練習</p>
+                  <p className="text-gray-400">{lang === 'zh' ? '目前沒有報名任何練習' : 'No practices registered'}</p>
                 ) : (
                   myRegistrations.map((reg, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-orange-50 p-4 rounded-lg border border-orange-200">
@@ -281,7 +299,7 @@ const MemberPage = () => {
                       <button
                         onClick={() => handleCancel(reg.practicedates)}
                         className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full transition"
-                        title="取消報名"
+                        title={lang === 'zh' ? '取消報名' : 'Cancel registration'}
                       >
                         <Trash2 size={20} />
                       </button>
@@ -296,10 +314,10 @@ const MemberPage = () => {
         {/* 座位表預覽 */}
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-l-8 border-sky-500 pl-4">
-            📊 練習座位表 / Seating Arrangement
+            📊 {lang === 'zh' ? '練習座位表 / Seating Arrangement' : 'Seating Arrangement'}
           </h2>
           <p className="text-gray-500 mb-8 ml-6">
-            * 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。
+            {lang === 'zh' ? '* 這是系統根據目前報名狀況自動預排的結果，實際座位可能由教練現場調整。' : '* This is an automatic pre-arrangement based on current registrations. The coach may adjust actual seats on site.'}
           </p>
 
           <div className="grid grid-cols-1 gap-12">
@@ -313,7 +331,7 @@ const MemberPage = () => {
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-sky-600 mb-4"></div>
-            <p className="font-bold text-sky-800">資料傳輸中...</p>
+            <p className="font-bold text-sky-800">{lang === 'zh' ? '資料傳輸中...' : 'Loading...'}</p>
           </div>
         </div>
       )}

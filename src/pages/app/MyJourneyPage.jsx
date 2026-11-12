@@ -105,6 +105,7 @@ export default function MyJourneyPage() {
         translated = translated.replace('出席練習', 'Attended Practice');
         translated = translated.replace('體能課', 'Fitness Class');
         translated = translated.replace('自主訓練', 'Self-Training');
+        translated = translated.replace('積點變動', 'Points Change');
         return translated;
     };
 
@@ -119,6 +120,8 @@ export default function MyJourneyPage() {
         };
         return map[type] || type;
     };
+
+    const tbdLabel = lang === 'zh' ? '待定' : 'TBD';
 
     // 活動類別選項 - with bilingual support
     const categoryOptions = [
@@ -181,7 +184,7 @@ export default function MyJourneyPage() {
                     history: (pointHistory || []).map(ev => ({
                         id: ev.id,
                         activity: ev.description || ev.point_rules?.rule_name || '積點變動',
-                        date: new Date(ev.created_at).toLocaleDateString('zh-TW'),
+                        date: ev.created_at, // 原始時間，顯示時依語言格式化
                         points: ev.points_change,
                         type: ev.event_type
                     })),
@@ -219,11 +222,12 @@ export default function MyJourneyPage() {
                         id: reg.id || idx,
                         title: activity.name,
                         date: activity.date,
-                        time: `${activity.start_time || (lang === 'zh' ? '待定' : 'TBD')}`,
-                        location: activity.location || (lang === 'zh' ? '待定' : 'TBD'),
-                        type: activity.type === 'boat_practice' ? (lang === 'zh' ? '訓練' : 'Training') :
-                            activity.type === 'race' ? (lang === 'zh' ? '比賽' : 'Race') :
-                                activity.type === 'team_building' ? (lang === 'zh' ? '團建' : 'Team Building') : (lang === 'zh' ? '內部' : 'Internal')
+                        time: activity.start_time || '',
+                        location: activity.location || '',
+                        // type 為比對用 key（與 categoryOptions.value、getTypeIcon 一致），不隨語言改變
+                        type: activity.type === 'boat_practice' ? '訓練' :
+                            activity.type === 'race' ? '比賽' :
+                                activity.type === 'team_building' ? '團建' : '內部'
                     };
 
                     const today = new Date();
@@ -281,17 +285,17 @@ export default function MyJourneyPage() {
     const handleSubmitUpload = async () => {
         // 驗證
         if (!uploadForm.date || !uploadForm.type) {
-            return Swal.fire('提示', '請填寫日期與訓練類型', 'warning');
+            return Swal.fire(lang === 'zh' ? '提示' : 'Notice', lang === 'zh' ? '請填寫日期與訓練類型' : 'Please fill in date and training type', 'warning');
         }
 
         if (uploadForm.type === '其他' && !uploadForm.customType.trim()) {
-            return Swal.fire('提示', '請輸入自訂訓練項目', 'warning');
+            return Swal.fire(lang === 'zh' ? '提示' : 'Notice', lang === 'zh' ? '請輸入自訂訓練項目' : 'Please enter a custom training type', 'warning');
         }
 
         // 顯示上傳中
         Swal.fire({
-            title: '上傳中...',
-            text: '正在壓縮並上傳您的訓練紀錄',
+            title: lang === 'zh' ? '上傳中...' : 'Uploading...',
+            text: lang === 'zh' ? '正在壓縮並上傳您的訓練紀錄' : 'Compressing and uploading your training record',
             allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
@@ -325,7 +329,7 @@ export default function MyJourneyPage() {
             });
 
             if (result.success) {
-                Swal.fire('成功', '訓練紀錄已送出', 'success');
+                Swal.fire(lang === 'zh' ? '成功' : 'Success', lang === 'zh' ? '訓練紀錄已送出' : 'Training record submitted', 'success');
                 // 重置表單
                 setUploadForm({
                     date: new Date().toISOString().split('T')[0],
@@ -337,11 +341,11 @@ export default function MyJourneyPage() {
                 setRefreshKey(prev => prev + 1); // 觸發重新載入
                 setCurrentPage(1); // 回到第一頁
             } else {
-                Swal.fire('失敗', result.message || '送出失敗', 'error');
+                Swal.fire(lang === 'zh' ? '失敗' : 'Failed', result.message || (lang === 'zh' ? '送出失敗' : 'Submission failed'), 'error');
             }
         } catch (error) {
             console.error(error);
-            Swal.fire('失敗', '發生未知錯誤', 'error');
+            Swal.fire(lang === 'zh' ? '失敗' : 'Failed', lang === 'zh' ? '發生未知錯誤' : 'An unknown error occurred', 'error');
         }
     };
 
@@ -420,7 +424,7 @@ export default function MyJourneyPage() {
             title: lang === 'zh' ? '確定要刪除？' : 'Delete this record?',
             html: lang === 'zh'
                 ? `<p>刪除「${record.type}（${record.date}）」的紀錄後，<br/><strong>對應的 M 點將自動扣除</strong>。</p>`
-                : `<p>Deleting "${record.type} (${record.date})" will <strong>automatically deduct the corresponding M points</strong>.</p>`,
+                : `<p>Deleting "${getTranslatedTrainingType(record.type)} (${record.date})" will <strong>automatically deduct the corresponding M points</strong>.</p>`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
@@ -466,13 +470,18 @@ export default function MyJourneyPage() {
     ];
 
     const getStatusBadge = (status) => {
+        const statusLabel = {
+            '審核中': lang === 'zh' ? '審核中' : 'Pending',
+            '已通過': lang === 'zh' ? '已通過' : 'Approved',
+            '已拒絕': lang === 'zh' ? '已拒絕' : 'Rejected'
+        };
         switch (status) {
             case '審核中':
-                return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full flex items-center gap-1"><AlertCircle size={12} /> 審核中</span>;
+                return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full flex items-center gap-1"><AlertCircle size={12} /> {statusLabel['審核中']}</span>;
             case '已通過':
-                return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1"><CheckCircle size={12} /> 已通過</span>;
+                return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1"><CheckCircle size={12} /> {statusLabel['已通過']}</span>;
             case '已拒絕':
-                return <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full flex items-center gap-1"><XCircle size={12} /> 已拒絕</span>;
+                return <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full flex items-center gap-1"><XCircle size={12} /> {statusLabel['已拒絕']}</span>;
             default:
                 return null;
         }
@@ -570,8 +579,8 @@ export default function MyJourneyPage() {
                                                         <div className="flex-1 min-w-0">
                                                             <div className="font-bold text-gray-800 truncate">{event.title}</div>
                                                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-1">
-                                                                <span className="flex items-center gap-1"><Clock size={14} /> {event.date} {event.time}</span>
-                                                                <span className="flex items-center gap-1"><MapPin size={14} /> {event.location}</span>
+                                                                <span className="flex items-center gap-1"><Clock size={14} /> {event.date} {event.time || tbdLabel}</span>
+                                                                <span className="flex items-center gap-1"><MapPin size={14} /> {event.location || tbdLabel}</span>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -642,7 +651,7 @@ export default function MyJourneyPage() {
                                                             <div className="font-bold text-gray-800 truncate">{event.title}</div>
                                                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-1">
                                                                 <span>{event.date}</span>
-                                                                <span>{event.location}</span>
+                                                                <span>{event.location || tbdLabel}</span>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -887,7 +896,7 @@ export default function MyJourneyPage() {
                                                 <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
                                                     <div>
                                                         <div className="font-medium text-gray-800">{getTranslatedHistoryItem(item.activity)}</div>
-                                                        <div className="text-sm text-gray-500">{item.date}</div>
+                                                        <div className="text-sm text-gray-500">{new Date(item.date).toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US')}</div>
                                                     </div>
                                                     <span className={`font-bold ${item.points > 0 ? 'text-green-600' : 'text-red-500'
                                                         }`}>
@@ -992,8 +1001,8 @@ export default function MyJourneyPage() {
                                                                                 setPointsData(prev => {
                                                                                     const newItem = {
                                                                                         id: Date.now(),
-                                                                                        activity: `${lang === 'zh' ? '兌換' : 'Redeem'}: ${product.name}`,
-                                                                                        date: new Date().toLocaleDateString('zh-TW'),
+                                                                                        activity: `兌換: ${product.name}`, // 顯示時由 getTranslatedHistoryItem 依語言轉換
+                                                                                        date: new Date().toISOString(), // 原始時間，顯示時依語言格式化
                                                                                         points: -product.price,
                                                                                         type: 'redemption'
                                                                                     };
